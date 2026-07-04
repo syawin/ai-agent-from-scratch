@@ -597,3 +597,11 @@ Temporary Items
 ### Zig template
 .zig-cache/
 zig-out/
+### JEnv template
+# JEnv local Java version configuration file
+.java-version
+
+# Used by previous versions of JEnv
+.jenv-version
+
+/.junie/
