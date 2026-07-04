@@ -12,7 +12,7 @@ suspend fun main() {
     val openAI = OpenAI(
         OpenAIConfig(
             token = "lm-studio",
-            host = OpenAIHost(baseUrl = "http://localhost:1234/v1"),
+            host = OpenAIHost(baseUrl = "http://localhost:1234/v1/"),
         )
     )
 
