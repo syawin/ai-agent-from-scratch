@@ -11,9 +11,7 @@ repositories {
 }
 
 dependencies {
-    implementation(platform("com.aallam.openai:openai-client-bom:4.1.0"))
-    implementation("com.aallam.openai:openai-client")
-    runtimeOnly("io.ktor:ktor-client-okhttp")
+    implementation("com.openai:openai-java:4.41.0")
 
     testImplementation(kotlin("test"))
 }
@@ -23,7 +21,7 @@ application {
 }
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(24)
 }
 
 tasks.test {

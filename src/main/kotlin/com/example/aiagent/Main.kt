@@ -1,45 +1,33 @@
 package com.example.aiagent
 
-import com.aallam.openai.api.chat.ChatCompletionRequest
-import com.aallam.openai.api.chat.ChatMessage
-import com.aallam.openai.api.chat.ChatRole
-import com.aallam.openai.api.http.Timeout
-import com.aallam.openai.api.model.ModelId
-import com.aallam.openai.client.OpenAI
-import com.aallam.openai.client.OpenAIConfig
-import com.aallam.openai.client.OpenAIHost
-import io.ktor.client.plugins.*
+import com.openai.client.OpenAIClient
+import com.openai.client.okhttp.OpenAIOkHttpClient
+import com.openai.models.chat.completions.ChatCompletionCreateParams
 import java.net.ConnectException
+import java.net.SocketTimeoutException
+import java.time.Duration
 import kotlin.system.exitProcess
-import kotlin.time.Duration.Companion.seconds
 
-suspend fun main() {
-    val openAI = OpenAI(
-        OpenAIConfig(
-            token = "lm-studio",
-            host = OpenAIHost(baseUrl = "http://localhost:1234/v1/"),
-            timeout = Timeout(connect = 5.seconds, socket = 10.seconds, request = 30.seconds),
-        )
-    )
+fun main() {
+    val client: OpenAIClient = OpenAIOkHttpClient.builder()
+        .apiKey("lm-studio")
+        .baseUrl("http://localhost:1234/v1/")
+        .timeout(Duration.ofSeconds(30))
+        .build()
 
-    val request = ChatCompletionRequest(
-        model = ModelId("local-model"),
-        messages = listOf(
-            ChatMessage(role = ChatRole.System, content = "You are a helpful assistant!"),
-            ChatMessage(role = ChatRole.User, content = "Hello!"),
-        ),
-    )
+    val params = ChatCompletionCreateParams.builder()
+        .addSystemMessage("You are a helpful assistant!")
+        .addUserMessage("Hello!")
+        .model("local-model")
+        .build()
 
     try {
-        val completion = openAI.chatCompletion(request)
-        println(completion.choices.first().message.content)
+        val completion = client.chat().completions().create(params)
+        println(completion.choices().first().message().content().orElse(""))
     } catch (e: ConnectException) {
         println("Could not connect to the service at http://localhost:1234. Is LM Studio running?")
         exitProcess(1)
-    } catch (e: HttpRequestTimeoutException) {
-        println("Request timed out. The service at http://localhost:1234 did not respond in time.")
-        exitProcess(1)
-    } catch (e: java.net.SocketTimeoutException) {
+    } catch (e: SocketTimeoutException) {
         println("Request timed out. The service at http://localhost:1234 did not respond in time.")
         exitProcess(1)
     } catch (e: Exception) {
