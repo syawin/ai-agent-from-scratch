@@ -18,7 +18,7 @@ class ServiceRunningTest {
         val params = ChatCompletionCreateParams.builder()
             .addSystemMessage("You are a helpful assistant!")
             .addUserMessage("Say hello.")
-            .model("wizardlm-1.0-uncensored-codellama-34b")
+            .model("local-model")
             .build()
 
         val completion = client.chat().completions().create(params)
