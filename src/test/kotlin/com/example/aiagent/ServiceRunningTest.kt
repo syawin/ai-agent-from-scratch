@@ -10,19 +10,29 @@ import kotlin.test.assertFalse
 class ServiceRunningTest {
     @Test
     fun `service is running and returns a response`() {
-        val client: OpenAIClient = OpenAIOkHttpClient.builder()
-            .apiKey("lm-studio")
-            .baseUrl("http://localhost:1234/v1/")
-            .build()
+        val client: OpenAIClient =
+            OpenAIOkHttpClient
+                .builder()
+                .apiKey("lm-studio")
+                .baseUrl("http://localhost:1234/v1/")
+                .build()
 
-        val params = ChatCompletionCreateParams.builder()
-            .addSystemMessage("You are a helpful assistant!")
-            .addUserMessage("Say hello.")
-            .model("local-model")
-            .build()
+        val params =
+            ChatCompletionCreateParams
+                .builder()
+                .addSystemMessage("You are a helpful assistant!")
+                .addUserMessage("Say hello.")
+                .model("local-model")
+                .build()
 
         val completion = client.chat().completions().create(params)
-        val content = completion.choices().first().message().content().orElse("")
+        val content =
+            completion
+                .choices()
+                .first()
+                .message()
+                .content()
+                .orElse("")
         assertFalse(content.isNullOrBlank(), "Expected a non-blank response from the service")
     }
 }

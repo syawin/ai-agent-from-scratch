@@ -14,6 +14,7 @@ dependencies {
     implementation("com.openai:openai-java:4.41.0")
 
     testImplementation(kotlin("test"))
+    testImplementation("io.mockk:mockk:1.14.2")
 }
 
 application {

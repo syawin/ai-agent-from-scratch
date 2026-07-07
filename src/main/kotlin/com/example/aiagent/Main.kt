@@ -8,9 +8,15 @@ import java.net.SocketTimeoutException
 import java.time.Duration
 import kotlin.system.exitProcess
 
-data class Message(val role: String, val content: String)
+data class Message(
+    val role: String,
+    val content: String,
+)
 
-fun agentLoop(client: OpenAIClient) {
+fun agentLoop(
+    client: OpenAIClient,
+    exit: (Int) -> Nothing = ::exitProcess,
+) {
     val history = mutableListOf(Message("system", "You are a helpful assistant!"))
 
     while (true) {
@@ -32,15 +38,22 @@ fun agentLoop(client: OpenAIClient) {
 
         try {
             val completion = client.chat().completions().create(paramsBuilder.build())
-            val response = completion.choices().firstOrNull()?.message()?.content()?.orElse("") ?: "(no response)"
+            val response =
+                completion
+                    .choices()
+                    .firstOrNull()
+                    ?.message()
+                    ?.content()
+                    ?.orElse("")
+                    ?: "(no response)"
             println(response)
             history.add(Message("assistant", response))
         } catch (e: ConnectException) {
             println("Could not connect to the service at http://localhost:1234. Is LM Studio running?")
-            exitProcess(1)
+            exit(1)
         } catch (e: SocketTimeoutException) {
             println("Request timed out. The service at http://localhost:1234 did not respond in time.")
-            exitProcess(1)
+            exit(1)
         } catch (e: Exception) {
             println("An unexpected error occurred: ${e.message}")
             history.removeLastOrNull()
@@ -49,10 +62,12 @@ fun agentLoop(client: OpenAIClient) {
 }
 
 fun main() {
-    val client: OpenAIClient = OpenAIOkHttpClient.builder()
-        .apiKey("lm-studio")
-        .baseUrl("http://localhost:1234/v1/")
-        .timeout(Duration.ofSeconds(30))
-        .build()
+    val client: OpenAIClient =
+        OpenAIOkHttpClient
+            .builder()
+            .apiKey("lm-studio")
+            .baseUrl("http://localhost:1234/v1/")
+            .timeout(Duration.ofSeconds(30))
+            .build()
     agentLoop(client)
 }
