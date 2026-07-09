@@ -49,10 +49,10 @@ fun agentLoop(
             println(response)
             history.add(Message("assistant", response))
         } catch (e: ConnectException) {
-            println("Could not connect to the service at http://localhost:1234. Is LM Studio running?")
+            println("Could not connect to the service at http://localhost:1234. Is LM Studio running? (${e.message})")
             exit(1)
         } catch (e: SocketTimeoutException) {
-            println("Request timed out. The service at http://localhost:1234 did not respond in time.")
+            println("Request timed out. The service at http://localhost:1234 did not respond in time. (${e.message})")
             exit(1)
         } catch (e: Exception) {
             println("An unexpected error occurred: ${e.message}")
