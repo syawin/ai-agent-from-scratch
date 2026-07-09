@@ -22,7 +22,7 @@ fun agentLoop(
     while (true) {
         print("> ")
         val input = readlnOrNull() ?: break
-        if (input.trim() == "exit") break
+        if (input.trim() == "\\exit") break
         if (input.isBlank()) continue
 
         history.add(Message("user", input))
