@@ -82,7 +82,7 @@ class AgentLoopTest {
 
     @Test
     fun `exit command terminates loop without API call`() {
-        withInput("exit")
+        withInput("\\exit")
         agentLoop(client)
         verify(exactly = 0) { completionService.create(any<ChatCompletionCreateParams>()) }
     }
@@ -96,7 +96,7 @@ class AgentLoopTest {
 
     @Test
     fun `blank input is skipped without API call`() {
-        withInput("", "   ", "exit")
+        withInput("", "   ", "\\exit")
         agentLoop(client)
         verify(exactly = 0) { completionService.create(any<ChatCompletionCreateParams>()) }
     }
@@ -105,7 +105,7 @@ class AgentLoopTest {
 
     @Test
     fun `successful response is printed to stdout`() {
-        withInput("hello", "exit")
+        withInput("hello", "\\exit")
         stubCreate(mockResponse("Hello there!"))
         agentLoop(client)
         assertContains(capturedOutput(), "Hello there!")
@@ -113,7 +113,7 @@ class AgentLoopTest {
 
     @Test
     fun `no response fallback when choices list is empty`() {
-        withInput("hello", "exit")
+        withInput("hello", "\\exit")
         stubCreate(mockEmptyChoices())
         agentLoop(client)
         assertContains(capturedOutput(), "(no response)")
@@ -121,7 +121,7 @@ class AgentLoopTest {
 
     @Test
     fun `empty content returns empty string not no-response`() {
-        withInput("hello", "exit")
+        withInput("hello", "\\exit")
         stubCreate(mockResponse(""))
         agentLoop(client)
         assertFalse(
@@ -132,7 +132,7 @@ class AgentLoopTest {
 
     @Test
     fun `multi-turn conversation prints both responses`() {
-        withInput("first", "second", "exit")
+        withInput("first", "second", "\\exit")
         every { completionService.create(any<ChatCompletionCreateParams>()) } returnsMany
             listOf(
                 mockResponse("Response 1"),
@@ -182,7 +182,7 @@ class AgentLoopTest {
 
     @Test
     fun `generic exception prints error and loop continues`() {
-        withInput("hello", "exit")
+        withInput("hello", "\\exit")
         stubCreateThrows(RuntimeException("Something broke"))
         agentLoop(client)
         assertContains(capturedOutput(), "An unexpected error occurred: Something broke")
@@ -190,7 +190,7 @@ class AgentLoopTest {
 
     @Test
     fun `generic exception removes failed message from history`() {
-        withInput("bad-input", "good-input", "exit")
+        withInput("bad-input", "good-input", "\\exit")
         every { completionService.create(any<ChatCompletionCreateParams>()) } throws
             RuntimeException(
                 "fail",
