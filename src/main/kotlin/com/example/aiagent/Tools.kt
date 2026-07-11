@@ -137,3 +137,39 @@ fun grep(
         }
     return if (results.isNotEmpty()) results.joinToString("\n") else "(no matches)"
 }
+
+/**
+ * Writes the specified content to a file at the given path. If the parent
+ * directories do not exist, they will be created automatically.
+ *
+ * @param path The file path where the content should be written.
+ * @param content The content to write to the file.
+ * @return A message indicating the number of bytes written and the file path.
+ */
+fun writeFile(
+    path: String,
+    content: String,
+): String {
+    val p = Paths.get(path)
+    p.parent?.let(Files::createDirectories)
+    Files.writeString(p, content)
+    return "Wrote ${content.toByteArray(Charsets.UTF_8).size} bytes to $path"
+}
+
+fun editFile(
+    path: String,
+    oldString: String,
+    newString: String,
+): String {
+    // Replace the first occurrence of old_string with new_string in a file.
+    val p = Paths.get(path)
+    if (!Files.exists(p)) {
+        return "Error: file not found: $path"
+    }
+    val original = Files.readString(p)
+    if (!original.contains(oldString)) {
+        return "Error: string not found in $path"
+    }
+    Files.writeString(p, original.replaceFirst(oldString, newString))
+    return "Edited $path"
+}
