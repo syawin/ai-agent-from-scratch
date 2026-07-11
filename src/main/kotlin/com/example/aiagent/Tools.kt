@@ -2,7 +2,10 @@
 
 package com.example.aiagent
 
+import org.jsoup.Jsoup
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URI
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
@@ -156,6 +159,15 @@ fun writeFile(
     return "Wrote ${content.toByteArray(Charsets.UTF_8).size} bytes to $path"
 }
 
+/**
+ * Edits a file by replacing the first occurrence of a specified string with a new string.
+ *
+ * @param path The file path to be edited.
+ * @param oldString The string to be replaced in the file.
+ * @param newString The string to replace the old string with.
+ * @return A message indicating the outcome of the editing operation. Returns an error message if the file does not
+ * exist or if the specified string is not found in the file.
+ */
 fun editFile(
     path: String,
     oldString: String,
@@ -172,4 +184,37 @@ fun editFile(
     }
     Files.writeString(p, original.replaceFirst(oldString, newString))
     return "Edited $path"
+}
+
+/**
+ * Fetches the given URL and returns its plain-text content extracted from the HTML.
+ *
+ * @param url The URL of the web page to fetch. Must use the "http" or "https" protocol.
+ * @return The plain-text content of the fetched web page, or an error message if the fetch fails or the protocol is unsupported.
+ */
+fun webfetch(url: String): String {
+    /** Fetch a URL and return its full plain-text content (up to 2 MB). */
+    val maxResponseBytes = 2 * 1024 * 1024
+    var connection: HttpURLConnection? = null
+    try {
+        val parsed = URI(url).toURL()
+        if (parsed.protocol !in listOf("http", "https")) {
+            return "Error fetching $url: unsupported scheme '${parsed.protocol}'."
+        }
+        connection = parsed.openConnection() as HttpURLConnection
+        connection.setRequestProperty("User-Agent", "agent/1.0")
+        connection.connectTimeout = 15000
+        connection.readTimeout = 15000
+        connection.connect()
+        val raw =
+            connection.inputStream
+                .use { it.readNBytes(maxResponseBytes) }
+                .toString(Charsets.UTF_8)
+        val soup = Jsoup.parse(raw)
+        return soup.text().replace("\n{3,}".toRegex(), "\n\n").trim()
+    } catch (e: Exception) {
+        return "Error fetching $url: ${e.message ?: e.javaClass.simpleName}"
+    } finally {
+        connection?.disconnect()
+    }
 }
