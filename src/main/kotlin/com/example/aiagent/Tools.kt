@@ -207,9 +207,7 @@ fun webfetch(url: String): String {
         connection.readTimeout = 15000
         connection.connect()
         val raw =
-            connection.inputStream
-                .use { it.readNBytes(maxResponseBytes) }
-                .toString(Charsets.UTF_8)
+            connection.inputStream.use { it.readNBytes(maxResponseBytes) }.toString(Charsets.UTF_8)
         val soup = Jsoup.parse(raw)
         return soup.text().replace("\n{3,}".toRegex(), "\n\n").trim()
     } catch (e: Exception) {
@@ -218,3 +216,195 @@ fun webfetch(url: String): String {
         connection?.disconnect()
     }
 }
+
+fun getToolSchemas(): List<Map<String, Any>> =
+    listOf(
+        mapOf(
+            "type" to "function",
+            "function" to
+                mapOf(
+                    "name" to "run_bash",
+                    "description" to "Run a bash command on the user's machine and return the output.",
+                    "parameters" to
+                        mapOf(
+                            "type" to "object",
+                            "properties" to
+                                mapOf(
+                                    "command" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "The bash command to execute.",
+                                        ),
+                                ),
+                            "required" to listOf("command"),
+                        ),
+                ),
+        ),
+        mapOf(
+            "type" to "function",
+            "function" to
+                mapOf(
+                    "name" to "read_file",
+                    "description" to "Read lines from a file.",
+                    "parameters" to
+                        mapOf(
+                            "type" to "object",
+                            "properties" to
+                                mapOf(
+                                    "path" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "Absolute or relative path to the file.",
+                                        ),
+                                    "offset" to
+                                        mapOf(
+                                            "type" to "integer",
+                                            "description" to "First line to read (1-indexed). Defaults to 1.",
+                                        ),
+                                    "limit" to
+                                        mapOf(
+                                            "type" to "integer",
+                                            "description" to "Maximum number of lines to return. Defaults to 200.",
+                                        ),
+                                ),
+                            "required" to listOf("path"),
+                        ),
+                ),
+        ),
+        mapOf(
+            "type" to "function",
+            "function" to
+                mapOf(
+                    "name" to "glob_files",
+                    "description" to "Find files matching a glob pattern (e.g. '**/*.py') inside a directory.",
+                    "parameters" to
+                        mapOf(
+                            "type" to "object",
+                            "properties" to
+                                mapOf(
+                                    "pattern" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "Glob pattern to match against file names.",
+                                        ),
+                                    "path" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "Root directory to search in. Defaults to '.'.",
+                                        ),
+                                ),
+                            "required" to listOf("pattern"),
+                        ),
+                ),
+        ),
+        mapOf(
+            "type" to "function",
+            "function" to
+                mapOf(
+                    "name" to "grep",
+                    "description" to "Search file contents for a regex pattern and return matching lines with file paths and line numbers.",
+                    "parameters" to
+                        mapOf(
+                            "type" to "object",
+                            "properties" to
+                                mapOf(
+                                    "pattern" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "Regular expression to search for.",
+                                        ),
+                                    "path" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "Directory to search in. Defaults to '.'.",
+                                        ),
+                                    "include" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to
+                                                "Filename glob to restrict which files are searched (e.g. '*.py'). Defaults to '*'.",
+                                        ),
+                                ),
+                            "required" to listOf("pattern"),
+                        ),
+                ),
+        ),
+        mapOf(
+            "type" to "function",
+            "function" to
+                mapOf(
+                    "name" to "write_file",
+                    "description" to "Write content to a file, creating it (and any missing parent directories) if it does not exist.",
+                    "parameters" to
+                        mapOf(
+                            "type" to "object",
+                            "properties" to
+                                mapOf(
+                                    "path" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "Path of the file to write.",
+                                        ),
+                                    "content" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "Full content to write to the file.",
+                                        ),
+                                ),
+                            "required" to listOf("path", "content"),
+                        ),
+                ),
+        ),
+        mapOf(
+            "type" to "function",
+            "function" to
+                mapOf(
+                    "name" to "edit_file",
+                    "description" to "Replace the first occurrence of a string in a file with a new string.",
+                    "parameters" to
+                        mapOf(
+                            "type" to "object",
+                            "properties" to
+                                mapOf(
+                                    "path" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "Path of the file to edit.",
+                                        ),
+                                    "old_string" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "Exact string to find and replace.",
+                                        ),
+                                    "new_string" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "String to replace it with.",
+                                        ),
+                                ),
+                            "required" to listOf("path", "old_string", "new_string"),
+                        ),
+                ),
+        ),
+        mapOf(
+            "type" to "function",
+            "function" to
+                mapOf(
+                    "name" to "webfetch",
+                    "description" to "Fetch a public URL (http/https only) and return its full plain-text content (up to 2 MB).",
+                    "parameters" to
+                        mapOf(
+                            "type" to "object",
+                            "properties" to
+                                mapOf(
+                                    "url" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "The URL to fetch (http/https).",
+                                        ),
+                                ),
+                            "required" to listOf("url"),
+                        ),
+                ),
+        ),
+    )
