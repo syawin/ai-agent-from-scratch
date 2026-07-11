@@ -26,6 +26,14 @@ runs unattended, or is used as a base for something real).
    backtracking. Separately, `Files.walk` (used by `globFiles` and `grep`) has no depth cap and
    can hang on symlink loops or very large trees.
 
+5. **Transitive Jackson async-parser DoS (WS-2026-0003, CVSS 7.5)** — `openai-java` currently
+   brings in `com.fasterxml.jackson.core:jackson-core:2.18.2`. Its non-blocking JSON parser does
+   not enforce `StreamReadConstraints.maxNumberLength` (1000 characters by default), allowing
+   untrusted JSON containing arbitrarily long numbers to cause excessive memory allocation and
+   CPU use. The synchronous parser is not affected. Consider overriding or upgrading the
+   dependency to the reported unaffected version, `jackson-core:2.21.1`, after checking
+   compatibility with the pinned `openai-java` version.
+
 ## Mitigation ideas (if/when this matters)
 
 - Confine file/path tools to a canonicalized project root; reject any resolved path outside it.
@@ -34,5 +42,7 @@ runs unattended, or is used as a base for something real).
 - Gate `runBash` behind an allowlist or an explicit confirmation step, similar to how production
   agent harnesses (e.g. Claude Code itself) require permission prompts before executing shell
   commands.
+- Upgrade or override the transitive `jackson-core` dependency to an unaffected version when
+  parsing untrusted JSON, and verify compatibility with `openai-java`.
 
 See [[CLAUDE.md]] for the project-level note pointing here.
