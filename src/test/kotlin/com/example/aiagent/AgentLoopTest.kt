@@ -4,6 +4,8 @@ import com.openai.client.OpenAIClient
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionMessage
+import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall
+import com.openai.models.chat.completions.ChatCompletionMessageToolCall
 import com.openai.services.blocking.ChatService
 import com.openai.services.blocking.chat.ChatCompletionService
 import io.mockk.every
@@ -57,6 +59,7 @@ class AgentLoopTest {
     private fun mockResponse(content: String): ChatCompletion {
         val message: ChatCompletionMessage = mockk()
         every { message.content() } returns Optional.of(content)
+        every { message.toolCalls() } returns Optional.empty()
         val choice: ChatCompletion.Choice = mockk()
         every { choice.message() } returns message
         val completion: ChatCompletion = mockk()
@@ -67,6 +70,32 @@ class AgentLoopTest {
     private fun mockEmptyChoices(): ChatCompletion {
         val completion: ChatCompletion = mockk()
         every { completion.choices() } returns emptyList()
+        return completion
+    }
+
+    private fun mockToolCallResponse(
+        name: String,
+        arguments: String,
+        id: String,
+    ): ChatCompletion {
+        val function =
+            ChatCompletionMessageFunctionToolCall.Function.builder()
+                .name(name)
+                .arguments(arguments)
+                .build()
+        val functionCall =
+            ChatCompletionMessageFunctionToolCall.builder()
+                .id(id)
+                .function(function)
+                .build()
+        val message: ChatCompletionMessage = mockk()
+        every { message.content() } returns Optional.empty()
+        every { message.toolCalls() } returns
+            Optional.of(listOf(ChatCompletionMessageToolCall.ofFunction(functionCall)))
+        val choice: ChatCompletion.Choice = mockk()
+        every { choice.message() } returns message
+        val completion: ChatCompletion = mockk()
+        every { completion.choices() } returns listOf(choice)
         return completion
     }
 
@@ -144,6 +173,73 @@ class AgentLoopTest {
         assertContains(output, "Response 2")
     }
 
+    @Test
+    fun `tool calls are executed and sent back before the final response`() {
+        withInput("use a tool", "\\exit")
+        every { completionService.create(any<ChatCompletionCreateParams>()) } returnsMany
+            listOf(
+                mockToolCallResponse("unknown_tool", "{}", "call-123"),
+                mockResponse("Done"),
+            )
+
+        agentLoop(client)
+
+        assertContains(capturedOutput(), "[tool] unknown_tool({})")
+        assertContains(capturedOutput(), "Done")
+        val capturedParams = mutableListOf<ChatCompletionCreateParams>()
+        verify(exactly = 2) { completionService.create(capture(capturedParams)) }
+        assertContains(capturedParams[1].toString(), "call-123")
+        assertContains(capturedParams[1].toString(), "Error: unknown tool 'unknown_tool'")
+    }
+
+    @Test
+    fun `malformed tool arguments are returned to the model and conversation recovers`() {
+        assertToolFailureIsReturned(
+            name = "read_file",
+            arguments = "{not-json",
+            id = "malformed-call",
+        )
+    }
+
+    @Test
+    fun `missing required tool argument is returned to the model and conversation recovers`() {
+        assertToolFailureIsReturned(
+            name = "read_file",
+            arguments = "{}",
+            id = "missing-argument-call",
+        )
+    }
+
+    @Test
+    fun `tool execution failure is returned to the model and conversation recovers`() {
+        assertToolFailureIsReturned(
+            name = "glob_files",
+            arguments = """{"pattern":"["}""",
+            id = "execution-failure-call",
+        )
+    }
+
+    private fun assertToolFailureIsReturned(
+        name: String,
+        arguments: String,
+        id: String,
+    ) {
+        withInput("use a tool", "\\exit")
+        every { completionService.create(any<ChatCompletionCreateParams>()) } returnsMany
+            listOf(
+                mockToolCallResponse(name, arguments, id),
+                mockResponse("Recovered"),
+            )
+
+        agentLoop(client)
+
+        assertContains(capturedOutput(), "Recovered")
+        val capturedParams = mutableListOf<ChatCompletionCreateParams>()
+        verify(exactly = 2) { completionService.create(capture(capturedParams)) }
+        assertContains(capturedParams[1].toString(), id)
+        assertContains(capturedParams[1].toString(), "Error executing tool '$name':")
+    }
+
     // --- Error-path tests ---
 
     @Test
@@ -156,7 +252,7 @@ class AgentLoopTest {
                 exitStatuses.add(status)
                 throw ExitProcessException(status)
             }
-        } catch (e: ExitProcessException) {
+        } catch (_: ExitProcessException) {
             // expected
         }
         assertContains(capturedOutput(), "Could not connect to the service")
@@ -173,7 +269,7 @@ class AgentLoopTest {
                 exitStatuses.add(status)
                 throw ExitProcessException(status)
             }
-        } catch (e: ExitProcessException) {
+        } catch (_: ExitProcessException) {
             // expected
         }
         assertContains(capturedOutput(), "Request timed out")
