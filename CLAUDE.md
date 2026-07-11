@@ -2,6 +2,15 @@
 
 Guidance for agents working in this repository.
 
+## Project context
+
+This is a learning project: an AI coding agent built from scratch (see
+`src/main/kotlin/com/example/aiagent/`). The tool implementations (bash exec, file read, glob,
+grep) intentionally favor simplicity over hardening — e.g. no sandboxing on shell execution, no
+path confinement on file reads. These gaps are acceptable for the project's purpose and should
+not be "fixed" reflexively; see `.claude/memory/future-security-considerations.md` for the
+specific findings and mitigation ideas to revisit if the project's scope ever changes.
+
 ## Documentation lookups
 
 **Prioritize Context7 when searching for library/framework/API documentation.**
