@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm") version "2.3.20"
     application
+    jacoco
 }
 
 group = "com.example.aiagent"
@@ -27,5 +28,43 @@ kotlin {
 }
 
 tasks.test {
-    useJUnitPlatform()
+    useJUnitPlatform { excludeTags("integration") }
+    finalizedBy(tasks.jacocoTestReport)
+}
+
+val integrationTest by tasks.registering(Test::class) {
+    description = "Runs tests that require a locally running LM Studio service."
+    group = "verification"
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnitPlatform { includeTags("integration") }
+    shouldRunAfter(tasks.test)
+}
+
+tasks.jacocoTestReport {
+    dependsOn(tasks.test)
+    reports {
+        html.required.set(true)
+        xml.required.set(true)
+    }
+}
+
+tasks.jacocoTestCoverageVerification {
+    dependsOn(tasks.test)
+    violationRules {
+        rule {
+            limit {
+                counter = "LINE"
+                minimum = "0.80".toBigDecimal()
+            }
+            limit {
+                counter = "METHOD"
+                minimum = "1.00".toBigDecimal()
+            }
+        }
+    }
+}
+
+tasks.check {
+    dependsOn(tasks.jacocoTestCoverageVerification)
 }

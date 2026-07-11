@@ -3,10 +3,12 @@ package com.example.aiagent
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.models.chat.completions.ChatCompletionCreateParams
+import org.junit.jupiter.api.Tag
 import kotlin.test.Test
 import kotlin.test.assertFalse
 
 // Integration test: requires LM Studio to be running at http://localhost:1234
+@Tag("integration")
 class ServiceRunningTest {
     @Test
     fun `service is running and returns a response`() {
@@ -33,6 +35,6 @@ class ServiceRunningTest {
                 .message()
                 .content()
                 .orElse("")
-        assertFalse(content.isNullOrBlank(), "Expected a non-blank response from the service")
+        assertFalse(content.isBlank(), "Expected a non-blank response from the service")
     }
 }

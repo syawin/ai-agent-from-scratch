@@ -5,6 +5,7 @@ import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.UUID
+import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteIfExists
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,6 +13,101 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ToolsTest {
+    @Test
+    fun `runBash returns stdout and stderr`() {
+        assertEquals("hello\nSTDERR:\nwarning", runBash("printf hello; printf warning >&2"))
+    }
+
+    @Test
+    fun `runBash describes a command with no output`() {
+        assertEquals("(no output)", runBash("true"))
+    }
+
+    @Test
+    fun `readFile returns the requested lines`() {
+        val file = Files.createTempFile("read-file", ".txt")
+        try {
+            Files.writeString(file, "one\ntwo\nthree\nfour")
+            assertEquals("two\nthree", readFile(file.toString(), offset = 2, limit = 2))
+            assertEquals("one", readFile(file.toString(), offset = 0, limit = 1))
+        } finally {
+            file.deleteIfExists()
+        }
+    }
+
+    @Test
+    fun `readFile reports a missing file`() {
+        assertEquals("File not found: missing-file", readFile("missing-file"))
+    }
+
+    @Test
+    fun `readFile treats a negative limit as an empty range`() {
+        val file = Files.createTempFile("read-file", ".txt")
+        try {
+            Files.writeString(file, "content")
+            assertEquals("", readFile(file.toString(), limit = -1))
+        } finally {
+            file.deleteIfExists()
+        }
+    }
+
+    @Test
+    fun `globFiles finds direct and nested matches in sorted order`() {
+        val root = Files.createTempDirectory("glob-files")
+        try {
+            val nested = root.resolve("nested").createDirectories()
+            Files.writeString(root.resolve("b.txt"), "b")
+            Files.writeString(nested.resolve("a.txt"), "a")
+            Files.writeString(nested.resolve("ignored.kt"), "ignored")
+            nested.resolve("directory.txt").createDirectories()
+
+            assertEquals(
+                listOf(root.resolve("b.txt"), nested.resolve("a.txt")).map { it.toString() }.sorted().joinToString("\n"),
+                globFiles("*.txt", root.toString()),
+            )
+            assertEquals("(no matches)", globFiles("*.md", root.toString()))
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `globFiles reports a missing path`() {
+        assertEquals("Path not found: missing-directory", globFiles("*", "missing-directory"))
+    }
+
+    @Test
+    fun `globFiles uses the current directory by default`() {
+        assertEquals("(no matches)", globFiles("definitely-not-a-real-file-${UUID.randomUUID()}"))
+    }
+
+    @Test
+    fun `grep finds matching lines in included files`() {
+        val root = Files.createTempDirectory("grep-files")
+        try {
+            val nested = root.resolve("nested").createDirectories()
+            val direct = root.resolve("direct.txt")
+            val nestedFile = nested.resolve("nested.txt")
+            Files.writeString(direct, "alpha\nbeta")
+            Files.writeString(nestedFile, "gamma alpha")
+            Files.writeString(nested.resolve("ignored.kt"), "alpha")
+
+            assertEquals(
+                listOf("${direct.toAbsolutePath()}:1: alpha", "${nestedFile.toAbsolutePath()}:1: gamma alpha").joinToString("\n"),
+                grep("alpha", root.toString(), "*.txt"),
+            )
+            assertEquals("(no matches)", grep("absent", root.toString()))
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `grep reports invalid patterns and missing paths`() {
+        assertTrue(grep("[", ".").startsWith("Invalid regex pattern:"))
+        assertEquals("Path not found: missing-directory", grep("text", "missing-directory"))
+    }
+
     @Test
     fun `writeFile writes a bare filename in the current directory`() {
         val filename = "write-file-${UUID.randomUUID()}.txt"
@@ -42,6 +138,58 @@ class ToolsTest {
         } finally {
             file.deleteIfExists()
         }
+    }
+
+    @Test
+    fun `writeFile creates missing parent directories`() {
+        val root = Files.createTempDirectory("write-file")
+        val file = root.resolve("one/two/file.txt")
+        try {
+            assertEquals("Wrote 7 bytes to $file", writeFile(file.toString(), "content"))
+            assertEquals("content", Files.readString(file))
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `editFile replaces only the first occurrence`() {
+        val file = Files.createTempFile("edit-file", ".txt")
+        try {
+            Files.writeString(file, "old and old")
+            assertEquals("Edited $file", editFile(file.toString(), "old", "new"))
+            assertEquals("new and old", Files.readString(file))
+        } finally {
+            file.deleteIfExists()
+        }
+    }
+
+    @Test
+    fun `editFile reports missing file and missing string`() {
+        assertEquals("Error: file not found: missing-file", editFile("missing-file", "old", "new"))
+        val file = Files.createTempFile("edit-file", ".txt")
+        try {
+            Files.writeString(file, "content")
+            assertEquals("Error: string not found in $file", editFile(file.toString(), "old", "new"))
+        } finally {
+            file.deleteIfExists()
+        }
+    }
+
+    @Test
+    fun `getToolSchemas defines each registered tool once`() {
+        val names =
+            getToolSchemas().map { schema ->
+                @Suppress("UNCHECKED_CAST")
+                val function = schema.getValue("function") as Map<String, Any>
+                function.getValue("name") as String
+            }
+
+        assertEquals(
+            listOf("run_bash", "read_file", "glob_files", "grep", "write_file", "edit_file", "webfetch"),
+            names,
+        )
+        assertEquals(names.size, names.toSet().size)
     }
 
     @Test

@@ -1,5 +1,3 @@
-@file:Suppress("unused")
-
 package com.example.aiagent
 
 import org.jsoup.Jsoup
@@ -10,7 +8,6 @@ import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.util.stream.Collectors
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.useLines
 
@@ -54,14 +51,14 @@ fun readFile(
         return "File not found: $filePath"
     }
     return file.useLines { lines ->
-        lines.drop(maxOf(0, offset - 1)).take(limit).joinToString("\n")
+        lines.drop(maxOf(0, offset - 1)).take(maxOf(0, limit)).joinToString("\n")
     }
 }
 
 /**
  * Walks the file tree rooted at [root] and returns every path it contains.
  */
-private fun walkFiles(root: Path): List<Path> = Files.walk(root).use { it.collect(Collectors.toList()) }
+private fun walkFiles(root: Path): List<Path> = Files.walk(root).use { it.toList() }
 
 /**
  * Finds files matching a given glob pattern within a specified directory and its subdirectories.
@@ -85,7 +82,8 @@ fun globFiles(
         walkFiles(root)
             .filter { file ->
                 val relative = root.relativize(file)
-                directMatcher.matches(relative) || nestedMatcher.matches(relative)
+                file.isRegularFile() &&
+                    (directMatcher.matches(relative) || nestedMatcher.matches(relative))
             }.map { it.toString() }
             .toSortedSet()
     return if (matches.isNotEmpty()) matches.joinToString("\n") else "(no matches)"
@@ -193,7 +191,6 @@ fun editFile(
  * @return The plain-text content of the fetched web page, or an error message if the fetch fails or the protocol is unsupported.
  */
 fun webfetch(url: String): String {
-    /** Fetch a URL and return its full plain-text content (up to 2 MB). */
     val maxResponseBytes = 2 * 1024 * 1024
     var connection: HttpURLConnection? = null
     try {

@@ -1,5 +1,6 @@
 package com.example.aiagent
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.chat.completions.ChatCompletionCreateParams
@@ -8,6 +9,7 @@ import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall
 import com.openai.models.chat.completions.ChatCompletionMessageToolCall
 import com.openai.services.blocking.ChatService
 import com.openai.services.blocking.chat.ChatCompletionService
+import com.sun.net.httpserver.HttpServer
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.unmockkAll
@@ -17,7 +19,9 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.io.PrintStream
 import java.net.ConnectException
+import java.net.InetSocketAddress
 import java.net.SocketTimeoutException
+import java.nio.file.Files
 import java.util.Optional
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -193,6 +197,54 @@ class AgentLoopTest {
     }
 
     @Test
+    fun `tool registry dispatches every supported tool`() {
+        val root = Files.createTempDirectory("tool-registry")
+        val source = root.resolve("source.txt")
+        val written = root.resolve("written.txt")
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/") { exchange ->
+            val body = "<p>registry web result</p>".toByteArray()
+            exchange.sendResponseHeaders(200, body.size.toLong())
+            exchange.responseBody.use { it.write(body) }
+        }
+        server.start()
+
+        try {
+            Files.writeString(source, "registry file result")
+            val json = ObjectMapper()
+            val calls =
+                listOf(
+                    "run_bash" to mapOf("command" to "printf 'registry bash result'"),
+                    "read_file" to mapOf("path" to source.toString()),
+                    "glob_files" to mapOf("pattern" to "*.txt", "path" to root.toString()),
+                    "grep" to mapOf("pattern" to "registry", "path" to root.toString(), "include" to "*.txt"),
+                    "write_file" to mapOf("path" to written.toString(), "content" to "old value"),
+                    "edit_file" to mapOf("path" to written.toString(), "old_string" to "old", "new_string" to "new"),
+                    "webfetch" to mapOf("url" to "http://127.0.0.1:${server.address.port}/"),
+                )
+            val responses =
+                calls.mapIndexed { index, (name, arguments) ->
+                    mockToolCallResponse(name, json.writeValueAsString(arguments), "call-$index")
+                } + mockResponse("All tools completed")
+            withInput("use every tool", "\\exit")
+            every { completionService.create(any<ChatCompletionCreateParams>()) } returnsMany responses
+
+            agentLoop(client)
+
+            val output = capturedOutput()
+            assertContains(output, "registry bash result")
+            assertContains(output, "registry file result")
+            assertContains(output, "registry web result")
+            assertEquals("new value", Files.readString(written))
+            assertContains(output, "All tools completed")
+            verify(exactly = responses.size) { completionService.create(any<ChatCompletionCreateParams>()) }
+        } finally {
+            server.stop(0)
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
     fun `malformed tool arguments are returned to the model and conversation recovers`() {
         assertToolFailureIsReturned(
             name = "read_file",
@@ -303,6 +355,15 @@ class AgentLoopTest {
             "Failed message should have been removed from history",
         )
         assertContains(secondParamsString, "good-input")
+    }
+
+    @Test
+    fun `main exits before connecting when given the exit command`() {
+        withInput("\\exit")
+
+        main()
+
+        assertContains(capturedOutput(), "> ")
     }
 }
 
