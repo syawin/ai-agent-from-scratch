@@ -606,3 +606,9 @@ zig-out/
 
 /.junie/
 /.claude/worktrees/
+
+# Grepathy (local, per-machine)
+.ai/grepathy/
+.claude/settings.local.json
+# CodeSpeak
+.codespeak/ignored/
