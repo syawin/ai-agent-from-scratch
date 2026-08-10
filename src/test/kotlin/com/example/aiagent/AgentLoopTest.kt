@@ -202,6 +202,7 @@ class AgentLoopTest {
         val source = root.resolve("source.txt")
         val written = root.resolve("written.txt")
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        // Serves static HTML content via local HTTP server
         server.createContext("/") { exchange ->
             val body = "<p>registry web result</p>".toByteArray()
             exchange.sendResponseHeaders(200, body.size.toLong())
@@ -213,6 +214,7 @@ class AgentLoopTest {
             Files.writeString(source, "registry file result")
             val json = ObjectMapper()
             val calls =
+                // Defines diverse tool execution parameters for registry testing
                 listOf(
                     "run_bash" to mapOf("command" to "printf 'registry bash result'"),
                     "read_file" to mapOf("path" to source.toString()),
