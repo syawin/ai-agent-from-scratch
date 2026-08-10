@@ -1,0 +1,35 @@
+{
+  "version": "0.1.0",
+  "profile_name": "mixed_mode",
+  "test_runner_configurations": {
+    "src.cs.md": {
+      "run_all_tests_command": {
+        "command_line": "./gradlew test; _EC=$?; python3 -c \"import xml.etree.ElementTree as ET, glob; root=ET.Element('testsuites'); [root.append(ET.parse(f).getroot()) for f in glob.glob('build/test-results/test/TEST-*.xml')]; ET.ElementTree(root).write('{tests_report_file}', xml_declaration=True, encoding='utf-8')\"; exit $_EC",
+        "cwd": "."
+      },
+      "run_specified_tests_command": {
+        "command_line": "./gradlew test $(python3 -c \"import sys; files='{tests_list}'.split(); print(' '.join(['--tests '+f.replace('src/test/kotlin/','').replace('.kt','').replace('/','.')  for f in files])\"); _EC=$?; python3 -c \"import xml.etree.ElementTree as ET, glob; root=ET.Element('testsuites'); [root.append(ET.parse(f).getroot()) for f in glob.glob('build/test-results/test/TEST-*.xml')]; ET.ElementTree(root).write('{tests_report_file}', xml_declaration=True, encoding='utf-8')\"; exit $_EC",
+        "cwd": "."
+      },
+      "run_all_tests_with_coverage_command": {
+        "command_line": "./gradlew test; _EC=$?; python3 -c \"import xml.etree.ElementTree as ET, glob; root=ET.Element('testsuites'); [root.append(ET.parse(f).getroot()) for f in glob.glob('build/test-results/test/TEST-*.xml')]; ET.ElementTree(root).write('{tests_report_file}', xml_declaration=True, encoding='utf-8')\"; python3 -c \"import xml.etree.ElementTree as ET; tree=ET.parse('build/reports/jacoco/test/jacocoTestReport.xml'); root=tree.getroot(); lines=[]; [lines.extend(['SF:src/main/kotlin/'+pkg.get('name')+'/'+sf.get('name')]+['DA:'+l.get('nr')+','+l.get('ci','0') for l in sf.findall('line')]+['end_of_record']) for pkg in root.findall('package') for sf in pkg.findall('sourcefile')]; open('{tests_coverage_report_file}','w').write('\\n'.join(lines))\"; exit $_EC",
+        "cwd": "."
+      },
+      "run_specified_tests_with_coverage_command": {
+        "command_line": "./gradlew test $(python3 -c \"import sys; files='{tests_list}'.split(); print(' '.join(['--tests '+f.replace('src/test/kotlin/','').replace('.kt','').replace('/','.')  for f in files])\"); _EC=$?; python3 -c \"import xml.etree.ElementTree as ET, glob; root=ET.Element('testsuites'); [root.append(ET.parse(f).getroot()) for f in glob.glob('build/test-results/test/TEST-*.xml')]; ET.ElementTree(root).write('{tests_report_file}', xml_declaration=True, encoding='utf-8')\"; python3 -c \"import xml.etree.ElementTree as ET; tree=ET.parse('build/reports/jacoco/test/jacocoTestReport.xml'); root=tree.getroot(); lines=[]; [lines.extend(['SF:src/main/kotlin/'+pkg.get('name')+'/'+sf.get('name')]+['DA:'+l.get('nr')+','+l.get('ci','0') for l in sf.findall('line')]+['end_of_record']) for pkg in root.findall('package') for sf in pkg.findall('sourcefile')]; open('{tests_coverage_report_file}','w').write('\\n'.join(lines))\"; exit $_EC",
+        "cwd": "."
+      },
+      "non_test_source_regex_include": [
+        "\\.kt$"
+      ],
+      "non_test_source_regex_exclude": [
+        "(^|/)test/",
+        "Test\\.kt$",
+        "Tests\\.kt$"
+      ],
+      "source_glob_patterns": [
+        "src/main/**/*.kt"
+      ]
+    }
+  }
+}

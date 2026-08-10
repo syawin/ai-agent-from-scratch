@@ -1,0 +1,59 @@
+{
+    "meta": {
+        "schema": {
+            "spec_before_refinement": {
+                "type": "file",
+                "relative_path": "spec_before_refinement.md",
+                "format": "text",
+                "by_task": "RefineSpecificationWithUserIntent"
+            },
+            "spec_analysis": {
+                "type": "file",
+                "relative_path": "spec_analysis.json",
+                "format": "json",
+                "by_task": "RefineSpecificationWithUserIntent"
+            },
+            "implemented_change_requests": {
+                "type": "file",
+                "relative_path": "implemented_change_requests.json",
+                "format": "json",
+                "by_task": "FinalizeChangeRequest"
+            },
+            "external_apis": {
+                "type": "file",
+                "relative_path": "external_apis.json",
+                "format": "json",
+                "by_task": "AnalyzeExternalApis"
+            },
+            "console_app_dev_command": {
+                "type": "file",
+                "relative_path": "console_app_dev_command.txt",
+                "format": "text",
+                "by_task": "GenerateCliUsageExamples"
+            },
+            "console_app_usage_examples": {
+                "type": "file",
+                "relative_path": "console_app_usage_examples.json",
+                "format": "json",
+                "by_task": "GenerateCliUsageExamples"
+            },
+            "sha_to_checkpoint": {
+                "type": "file",
+                "relative_path": "sha_to_checkpoint.json",
+                "format": "json"
+            }
+        },
+        "version": "0.2.0"
+    },
+    "phases_state": {
+        "managed_files_write_violations": [],
+        "extracted_sessions_intent": "### Functional requirements\n- Add the OpenAI SDK for Kotlin to the project\n- Error handlers must include the actual exception object `e` in their error messages\n- Blank input is skipped without making an API call\n- Exit command terminates the loop without making an API call\n- On generic exception, the failed message is removed from conversation history\n\n### Debugging\n- Failing test: blank input is skipped without API call\n- Failing test: generic exception removes failed message from history\n- Failing test: exit command terminates loop without API call\n\n### Test requirements\n- Fix failing test: blank input is skipped without API call\n- Fix failing test: generic exception removes failed message from history\n- Fix failing test: exit command terminates loop without API call\n\n### Non-goals\n- Committing IDE configuration files (.idea/) to version control\n- Committing environment variable files (.env) containing secrets such as OPENAI_API_KEY to version control",
+        "spec_before_refinement": ".codespeak/spec_before_refinement.md",
+        "spec_analysis": ".codespeak/spec_analysis.json",
+        "managed_files": {
+            "src.cs.md": [
+                "src"
+            ]
+        }
+    }
+}
