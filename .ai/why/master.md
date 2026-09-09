@@ -1,6 +1,6 @@
 # Why: master
 
-<!-- grepathy:v1 generated 2026-09-04 — review before sharing; edit freely, edits are preserved -->
+<!-- grepathy:v1 generated 2026-09-09 — review before sharing; edit freely, edits are preserved -->
 
 ## Intent
 Add core agent tools (bash, file read, glob, grep) and document security considerations for a learning-stage AI agent implementation.
@@ -318,3 +318,17 @@ Touches: `.ai/why/master.md`
 Why-pack hook auto-generated .ai/why/master.md during this session and claimed the TaskStatus enum includes a todo value. Source code correctly uses PENDING. Automated documentation may lag behind or misinterpret the code; source files remain the authoritative reference.
 
 Reviewer attention: If relying on .ai/why/ documentation for understanding, verify against the source code in src/main/kotlin/com/example/aiagent/ToDoList.kt.
+
+### Fix String/enum comparison in status count logic
+Status: agent-initiated
+Touches: `src/main/kotlin/com/example/aiagent/Tools.kt:281`
+
+The agent identified a correctness bug where `todoList()` compared a wire String (`it["status"]`) directly against a `TaskStatus` enum value, which never matched, causing all status counts to return zero. The fix uses `status.wire` for type-safe comparison between the wire string representation and the enum. Tests verified the correction.
+
+Reviewer attention: Confirm that all other TaskStatus enum comparisons against wire strings throughout the codebase follow this same wire-property pattern.
+
+### Remove dead code aliases in append method
+Status: agent-initiated
+Touches: `src/main/kotlin/com/example/aiagent/Tools.kt:258-259`
+
+The agent removed redundant variable aliases (`contentStr`, `statusStr`) from the `append()` method that served no functional purpose and added code noise. These unused bindings were identified and safely eliminated during review.
