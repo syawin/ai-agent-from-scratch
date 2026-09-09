@@ -35,6 +35,11 @@ private val json = ObjectMapper()
  * - `write_file`: Writes content to a file at a given path.
  * - `edit_file`: Replaces the first occurrence of a string in a file.
  * - `webfetch`: Fetches content from a specified URL.
+ * - `read_scratchpad`: Reads the current scratchpad content.
+ * - `write_scratchpad`: Replaces the current scratchpad content.
+ * - `todo_append`: Adds an item to the to-do list.
+ * - `todo_list`: Lists current to-do items.
+ * - `todo_update`: Updates an existing to-do item.
  *
  * This registry enables dynamic invocation of predefined tools based on their string key.
  */
@@ -69,6 +74,23 @@ private val TOOL_REGISTRY: Map<String, (Map<String, Any?>) -> String> =
             )
         },
         "webfetch" to { args -> webfetch(args.getValue("url") as String) },
+        "read_scratchpad" to { readScratchpad() },
+        "write_scratchpad" to { args -> writeScratchpad(args.getValue("content") as String) },
+        "todo_append" to { args ->
+            todoAppend(
+                (args.getValue("id") as Number).toInt(),
+                args.getValue("content") as String,
+                args.getValue("status") as String,
+            )
+        },
+        "todo_list" to { args -> todoList(args["include_completed"] as? Boolean ?: false) },
+        "todo_update" to { args ->
+            todoUpdate(
+                args.getValue("id") as String,
+                args["content"] as? String,
+                (args["status"] as? String)?.let(TaskStatus::from),
+            )
+        },
     )
 
 /**

@@ -82,8 +82,12 @@ fun globFiles(
         walkFiles(root)
             .filter { file ->
                 val relative = root.relativize(file)
-                file.isRegularFile() &&
-                    (directMatcher.matches(relative) || nestedMatcher.matches(relative))
+                file.isRegularFile() && (
+                    directMatcher.matches(relative) ||
+                        nestedMatcher.matches(
+                            relative,
+                        )
+                )
             }.map { it.toString() }
             .toSortedSet()
     return if (matches.isNotEmpty()) matches.joinToString("\n") else "(no matches)"
@@ -211,6 +215,114 @@ fun webfetch(url: String): String {
         return "Error fetching $url: ${e.message ?: e.javaClass.simpleName}"
     } finally {
         connection?.disconnect()
+    }
+}
+
+val scratchpad = Scratchpad()
+
+/**
+ * Reads and retrieves the contents of the scratchpad.
+ *
+ * @return A string representing the current content of the scratchpad. If the scratchpad is empty,
+ * it returns the string "(empty)".
+ */
+fun readScratchpad(): String = scratchpad.read()
+
+/**
+ * Writes the specified content into the scratchpad, overwriting any previous content.
+ *
+ * @param content The text to be written into the scratchpad.
+ * @return A confirmation message indicating the content was successfully written.
+ */
+fun writeScratchpad(content: String): String {
+    scratchpad.write(content)
+    return "Successfully written content into scratchpad"
+}
+
+val todoStore = ToDoList()
+
+/**
+ * Appends a new to-do item to the to-do list.
+ *
+ * @param id The unique identifier for the to-do item.
+ * @param content The description or content of the to-do item.
+ * @param status The status of the to-do item.
+ * @return A message indicating the success or failure of the operation.
+ */
+fun todoAppend(
+    id: Int,
+    content: String,
+    status: String,
+): String {
+    val idStr = id.toString()
+    return try {
+        todoStore.append(idStr, content, TaskStatus.from(status))
+        "Successfully appended to do item $idStr in to do list!"
+    } catch (e: Exception) {
+        "Failed to append to do item: ${e.message}"
+    }
+}
+
+/**
+ * Generates a formatted string representation of the to-do list.
+ *
+ * @param includeCompleted A boolean flag indicating whether to include completed items (e.g., tasks with a status of "done" or "cancelled").
+ * If set to `true`, completed tasks will be included in the list. Defaults to `false`.
+ * @return A formatted string showing the to-do list with item counts per status and item details,
+ * including retries if applicable.
+ */
+fun todoList(includeCompleted: Boolean = false): String {
+    val items = todoStore.read(includeCompleted)
+
+    var result = "To Do List (${items.size} items)\n"
+    TaskStatus.entries.forEach { status ->
+        val count = items.count { it["status"] == status.wire }
+        result += "$count ${status.name} items\n"
+    }
+
+    result += "-----\n"
+    for (item in items) {
+        val retries = item["retries"] as Int
+        val retryNote = if (retries > 0) ", $retries retries" else ""
+        result += "- [${item["id"]}] ${
+            item["content"]
+        } (${item["status"]}$retryNote)\n"
+    }
+
+    return result
+}
+
+/**
+ * Updates a to-do item with the provided content and/or status.
+ *
+ * @param id The unique identifier of the to-do item to update.
+ * @param content The new content or description for the to-do item. If null, the content will not be updated.
+ * @param status The new status for the to-do item. If null, the status will not be updated.
+ * @return A string message indicating the success or failure of the update operation. The message may include additional
+ * information, such as retry attempt details, if applicable.
+ */
+fun todoUpdate(
+    id: String,
+    content: String? = null,
+    status: TaskStatus? = null,
+): String {
+    if (content == null && status == null) {
+        return "No content or status was given to update. Nothing to do."
+    }
+    return try {
+        val item = todoStore.update(id, content, status)
+        val retries = item["retries"] as Int
+        // Evaluates retry status and returns appropriate progress message
+        if (item["status"] == "in_progress" && retries > 0) {
+            return if (retries >= RETRY_LIMIT) {
+                "Updated to do item $id to in_progress — but this is retry $retries of $RETRY_LIMIT (retry limit reached). Do not retry again. Escalate to the user instead."
+            } else {
+                "Successfully updated to do item $id! Retry attempt $retries of $RETRY_LIMIT."
+            }
+        }
+        "Successfully updated to do item $id!"
+    } catch (e: Exception) {
+        "Failed to update to do item $id: ${e.message}"
     }
 }
 
@@ -401,6 +513,124 @@ fun getToolSchemas(): List<Map<String, Any>> =
                                         ),
                                 ),
                             "required" to listOf("url"),
+                        ),
+                ),
+        ),
+        mapOf(
+            "type" to "function",
+            "function" to
+                mapOf(
+                    "name" to "read_scratchpad",
+                    "description" to "Read the current contents of the in-memory scratchpad.",
+                    "parameters" to
+                        mapOf(
+                            "type" to "object",
+                            "properties" to emptyMap<String, Any>(),
+                        ),
+                ),
+        ),
+        mapOf(
+            "type" to "function",
+            "function" to
+                mapOf(
+                    "name" to "write_scratchpad",
+                    "description" to "Replace the current contents of the in-memory scratchpad.",
+                    "parameters" to
+                        mapOf(
+                            "type" to "object",
+                            "properties" to
+                                mapOf(
+                                    "content" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "The content to store in the scratchpad.",
+                                        ),
+                                ),
+                            "required" to listOf("content"),
+                        ),
+                ),
+        ),
+        mapOf(
+            "type" to "function",
+            "function" to
+                mapOf(
+                    "name" to "todo_append",
+                    "description" to "Add a new item to the in-memory to-do list.",
+                    "parameters" to
+                        mapOf(
+                            "type" to "object",
+                            "properties" to
+                                mapOf(
+                                    "id" to
+                                        mapOf(
+                                            "type" to "integer",
+                                            "description" to "The unique numeric identifier for the item.",
+                                        ),
+                                    "content" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "The task description.",
+                                        ),
+                                    "status" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "enum" to TaskStatus.entries.map { it.wire },
+                                            "description" to "The initial status of the item.",
+                                        ),
+                                ),
+                            "required" to listOf("id", "content", "status"),
+                        ),
+                ),
+        ),
+        mapOf(
+            "type" to "function",
+            "function" to
+                mapOf(
+                    "name" to "todo_list",
+                    "description" to "List to-do items and summarize their statuses.",
+                    "parameters" to
+                        mapOf(
+                            "type" to "object",
+                            "properties" to
+                                mapOf(
+                                    "include_completed" to
+                                        mapOf(
+                                            "type" to "boolean",
+                                            "description" to "Whether to include done and cancelled items. Defaults to false.",
+                                        ),
+                                ),
+                        ),
+                ),
+        ),
+        mapOf(
+            "type" to "function",
+            "function" to
+                mapOf(
+                    "name" to "todo_update",
+                    "description" to "Update the content or status of an existing to-do item.",
+                    "parameters" to
+                        mapOf(
+                            "type" to "object",
+                            "properties" to
+                                mapOf(
+                                    "id" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "The unique identifier of the item to update.",
+                                        ),
+                                    "content" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "The replacement task description.",
+                                        ),
+                                    "status" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "enum" to TaskStatus.entries.map { it.wire },
+                                            "description" to "The replacement status.",
+                                        ),
+                                ),
+                            "required" to listOf("id"),
                         ),
                 ),
         ),

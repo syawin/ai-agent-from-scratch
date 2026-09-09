@@ -186,7 +186,20 @@ class ToolsTest {
             }
 
         assertEquals(
-            listOf("run_bash", "read_file", "glob_files", "grep", "write_file", "edit_file", "webfetch"),
+            listOf(
+                "run_bash",
+                "read_file",
+                "glob_files",
+                "grep",
+                "write_file",
+                "edit_file",
+                "webfetch",
+                "read_scratchpad",
+                "write_scratchpad",
+                "todo_append",
+                "todo_list",
+                "todo_update",
+            ),
             names,
         )
         assertEquals(names.size, names.toSet().size)
