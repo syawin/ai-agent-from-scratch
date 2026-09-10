@@ -27,12 +27,35 @@ Known Context7 library IDs:
 
 | Dependency | Context7 library ID |
 | --- | --- |
-| `com.openai:openai-java` (4.41.0) | `/openai/openai-java` |
+| `com.openai:openai-java` (4.42.0) | `/openai/openai-java` |
 | `io.mockk:mockk` (1.14.2) | `/mockk/mockk` |
 
 Note: Context7 tracks these at the repo level, not by Maven version, so the docs
 may reflect a newer release than the one pinned in `build.gradle.kts`. Verify any
 API against the pinned version if it doesn't match.
+
+If Context7's coverage is thin for what you need, the real classes live in
+`openai-java-core`, not the `openai-java` aggregate artifact (which ships no
+classes of its own). Extract `openai-java-core-<version>-sources.jar` from
+`~/.gradle/caches/modules-2/files-2.1/com.openai/openai-java-core/` and grep
+it directly for ground-truth signatures.
+
+## Testing
+
+- `./gradlew check` (not just `test`) is the real gate — it runs
+  `jacocoTestCoverageVerification` at 80% line / **100% method** coverage.
+  Prefer inline logic over new private helper functions unless you're also
+  adding a test that exercises them.
+- A clean checkout currently fails `./gradlew check` on a **pre-existing**
+  method-coverage gap (~76%, from `TOOL_REGISTRY` lambdas — e.g.
+  `read_scratchpad`/`todo_*` — never exercised via `AgentLoopTest`). This
+  predates any given change; verify with `git stash` before assuming you
+  caused it.
+- When mocking OpenAI SDK response objects with MockK for assertions that
+  check `.toString()` (see `AgentLoopTest.kt`), build nested objects (e.g.
+  `ResponseOutputMessage`, `ResponseFunctionToolCall`) via their real
+  `.builder()` chains, not `mockk<T>()` — a mocked object renders as an
+  opaque identifier in `toString()` and silently breaks substring assertions.
 
 <!-- grepathy:begin -->
 ## Design reasoning lives in `.ai/why/`
