@@ -1,6 +1,6 @@
 # Why: master
 
-<!-- grepathy:v1 generated 2026-09-09 — review before sharing; edit freely, edits are preserved -->
+<!-- grepathy:v1 generated 2026-09-10 — review before sharing; edit freely, edits are preserved -->
 
 ## Intent
 Add core agent tools (bash, file read, glob, grep) and document security considerations for a learning-stage AI agent implementation.
@@ -332,3 +332,126 @@ Status: agent-initiated
 Touches: `src/main/kotlin/com/example/aiagent/Tools.kt:258-259`
 
 The agent removed redundant variable aliases (`contentStr`, `statusStr`) from the `append()` method that served no functional purpose and added code noise. These unused bindings were identified and safely eliminated during review.
+
+### Verify OpenAI SDK method signatures against gradle-cached sources jar
+Status: agent-initiated — User prioritized Context7; agent chose primary-source verification after Context7 returned incomplete Responses API samples
+Touches: `build.gradle.kts`
+
+Agent extracted openai-java-core-4.42.0 sources jar from local gradle cache and inspected exact method signatures for FunctionTool.builder(), ResponseCreateParams.addTool(), ResponseOutputItem, ResponseInputItem, and ResponseFunctionToolCall before designing the implementation. This eliminated SDK-shape assumptions and provided concrete method names, required/optional field patterns, and builder signatures to all three parallel developer agents.
+
+Considered/rejected: Relying solely on Context7 documentation and training knowledge; agent judged primary-source inspection lower-risk than discovering SDK mismatches during implementation.
+Risk: Extra initial exploration overhead; jar extraction and source inspection delays planning phase.
+
+### Structure Responses API migration as three parallel developer agents
+Status: agent-initiated — User did not specify multi-agent decomposition; agent chose this strategy to parallelize independent implementation scopes
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`, `src/test/kotlin/com/example/aiagent/AgentLoopTest.kt`, `src/test/kotlin/com/example/aiagent/ServiceRunningTest.kt`
+
+Agent dispatched three parallel developers with non-overlapping file ownership: Main.kt for production request/dispatch/result-handling code, AgentLoopTest.kt for mock rebuilding against Responses API shapes, ServiceRunningTest.kt for end-to-end test migration. Agent sequenced ownership explicitly to prevent merge conflicts.
+
+Risk: Transient test compilation failures while Main.kt is mid-edit (per Kotlin module compilation semantics); agents instructed to report failures rather than modify Main.kt. Full ./gradlew check integration to run after all three agents return.
+Reviewer attention: Confirm no merge conflicts between the three parallel changes and that all dependencies between Main.kt and test files are satisfied after composition.
+
+### Preserve tool names, argument contracts, and execution behavior from legacy implementation
+Status: directed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`, `src/main/kotlin/com/example/aiagent/Tools.kt`
+
+User requirement explicitly stated: do not replace custom tools with OpenAI built-ins and keep tool behavior unchanged. Agent accepted this constraint and designed the adaptation to register legacy tools in Responses API format without changing their names, parameter schemas, or execution semantics.
+
+Reviewer attention: Verify each legacy tool's name, argument contract, and result handling remain semantically identical before and after Responses API registration.
+
+### Run full ./gradlew check verification after parallel implementation completes
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`, `src/test/kotlin/com/example/aiagent/AgentLoopTest.kt`, `src/test/kotlin/com/example/aiagent/ServiceRunningTest.kt`
+
+After the three parallel developer agents completed, full integration verification (./gradlew check: compile + tests + Jacoco coverage) was re-run to confirm no regressions. Result: all 58 tests passed (AgentLoopTest 17, ToDoListTest 20, ToolsTest 21); compilation succeeded; pre-existing coverage gap remained unchanged.
+
+Reviewer attention: Verify that FunctionTool parameter JSON schemas match actual argument dispatch in handleToolCalls; confirm LM Studio backend implements /v1/responses endpoint for integration tests.
+
+### Keep implementation simple and avoid unrelated refactoring
+Status: directed
+Touches: `src/main/kotlin/com/example/aiagent/**/*.kt`
+
+User requirement explicitly stated: implementation must remain appropriate for a learning project and avoid unrelated refactoring or security hardening. Agent constrained scope to Responses API migration only, deferring code quality improvements and security enhancements to future work.
+
+Reviewer attention: Confirm changes are focused solely on Responses API compatibility and do not introduce refactoring outside the explicit migration scope.
+
+### Verify Responses API signatures from openai-java-core source jar before implementation
+Status: agent-initiated — not requested; agent proactively extracted gradle-cached source jar to confirm exact method contracts instead of relying on documentation
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`, `src/main/kotlin/com/example/aiagent/Tools.kt`
+
+Before dispatching implementation agents, the agent extracted and inspected the pinned openai-java-core 4.42.0 source jar to verify exact method signatures for ResponseCreateParams, FunctionTool, ResponseOutputItem, ResponseFunctionToolCall, and ResponseInputItem builders. This replaced documentation-based assumptions with confirmed SDK contracts, reducing implementation risk of incorrect API usage.
+
+Risk: No risk; verification occurred upstream before implementation and prevented potential errors.
+
+### Preserve all 12 tool names and argument contracts across API migration
+Status: directed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`, `src/main/kotlin/com/example/aiagent/Tools.kt`
+
+All custom tool names (read_scratchpad, write_scratchpad, todo_list, todo_add, todo_remove, todo_mark_complete, todo_mark_incomplete, todo_clear, test_command, and three reserved slots) and their argument schemas remain unchanged. TOOL_SCHEMAS was retargeted to wrap FunctionTool objects via Tool.ofFunction(), but tool dispatch logic in handleToolCalls and argument parsing were preserved. Custom tools were not replaced with OpenAI API built-ins.
+
+Considered/rejected: Simplifying tool implementation by switching to OpenAI built-ins was explicitly rejected per requirements.
+
+### Define tool parameters via FunctionTool.builder().strict(false)
+Status: directed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+Tool definitions were implemented as FunctionTool objects with strict(false) on parameter validation. The strict(false) setting provides model flexibility in argument construction when targeting a local LM Studio backend that may not strictly conform to JSON Schema.
+
+### Move system prompt from chat message to ResponseCreateParams.instructions()
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+The system prompt transitioned from an EasyInputMessage with role=SYSTEM to ResponseCreateParams.instructions(). This architectural change was necessary because the Responses API structures system context differently than Chat Completions. Existing agent-loop tests exercise this change indirectly.
+
+### Filter response.output() for message and function_call items; silently skip unknown types
+Status: agent-initiated — design choice during output extraction; not explicitly specified in requirements
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+When extracting and rebuilding conversation history each loop iteration, response.output() is filtered for isMessage() and isFunctionCall() items only; types like reasoning or debug output are silently discarded. This preserves the conversation history as ResponseInputItem objects compatible with the next request. Irrelevant for local-model today, but means non-message/non-function-call output is lost if a future backend produces it.
+
+Risk: Reasoning tokens or other output types are silently discarded and never added to conversation history; future model backends producing these will lose that information.
+
+### In AgentLoopTest: mock Response object only; construct real ResponseOutputItem objects
+Status: discussed
+Touches: `src/test/kotlin/com/example/aiagent/AgentLoopTest.kt`
+
+AgentLoopTest was refactored to mock ResponseService and Response while building real ResponseOutputItem, ResponseFunctionToolCall, and ResponseOutputMessage objects via their builders. This approach keeps existing substring assertions over tool names and JSON arguments valid without duplicating assertion logic for each mocked object type.
+
+### Accept pre-existing Jacoco method-coverage gap (0.76 vs 1.00 gate) as not a migration regression
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`, `build.gradle.kts`
+
+After migration, ./gradlew check reported 0.76 method coverage (gate requires 1.00). Verification via git stash confirmed this exact ratio pre-existed in the unmigrated codebase; the gap is pre-existing (lambdas in TOOL_REGISTRY for read_scratchpad/write_scratchpad/todo_* are never exercised by AgentLoopTest and predate this work). Migration introduced no coverage regression.
+
+Risk: Method coverage remains below gate threshold; separate effort required to add test coverage for those lambdas or adjust the coverage gate.
+
+### Dispatch three parallel developer agents with non-overlapping file ownership
+Status: agent-initiated — not requested; agent chose parallelization to speed implementation while avoiding concurrent edits to same file
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`, `src/test/kotlin/com/example/aiagent/AgentLoopTest.kt`, `src/test/kotlin/com/example/aiagent/ServiceRunningTest.kt`
+
+Three independent developer agents were dispatched in parallel to migrate Main.kt, AgentLoopTest.kt, and ServiceRunningTest.kt respectively. File ownership was strictly non-overlapping. Each agent was instructed to report compiler issues (transient Kotlin-daemon failures from concurrent edits by another agent) rather than attempt fixes. After all three completed, full integration verification (./gradlew check) was run to catch regressions.
+
+Risk: Transient Kotlin-daemon compilation errors occurred while one agent edited Main.kt during another agent's compile window, but Gradle's non-daemon fallback resolved this automatically. Risk was well-understood and Gradle's robustness handled it.
+
+### Document response output-item filtering as known limitation for future backend changes
+Status: directed — User explicitly requested to note limitation as blind-spot; implementation approach was agent-determined
+Touches: `AgentLoopTest.kt`, `memory/responses-api-output-item-gap.md`, `memory/MEMORY.md`
+
+The agentLoop silently filters response.output() for message and function_call items, discarding other output types. This filtering was formally documented in project memory as an accepted limitation specific to the current local LM Studio backend, which does not emit reasoning or other extended output. The limitation is tracked with an explicit trigger: any future backend or model swap requires re-evaluating whether this filtering still holds.
+
+Risk: Adopting a model or backend that produces reasoning, thinking, or other non-message/non-function_call output will cause silent data loss without warning.
+Reviewer attention: Verify project memory documents the scope and trigger for revisiting this limitation. When evaluating backend or model changes, explicitly check whether new output types need to be handled.
+
+### Create responses-api migration notes file in project memory
+Status: directed
+Touches: `.claude/memory/responses-api-migration-notes.md`
+
+Creates a new memory file documenting the Responses API migration's output-item filtering limitation as an accepted gap for the current learning stage. Follows the existing convention established by future-security-considerations.md, making technical findings persistent and reviewable in version control.
+
+### Update CLAUDE.md to reference responses-api migration notes
+Status: discussed
+Touches: `CLAUDE.md`
+
+Adds a pointer from CLAUDE.md to the new responses-api-migration-notes memory file, ensuring future sessions discover it automatically via project instructions. Maintains consistency with existing patterns of referencing project-level findings.
+
+Reviewer attention: Verify CLAUDE.md reference is placed appropriately and uses consistent formatting with existing references.
