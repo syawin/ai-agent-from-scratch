@@ -463,3 +463,38 @@ Touches: `src/main/kotlin/com/example/aiagent/Main.kt`, `src/test/kotlin/com/exa
 Before committing the Responses API migration work, the agent ran a Codex review to verify no actionable regressions were introduced. The review confirmed that compilation and unit tests passed, with only the pre-existing Jacoco method-coverage gap (76% versus 100% gate) present—not a regression from the migration itself.
 
 Reviewer attention: Verify that the 12 tool implementations maintain their argument contracts and that response output filtering correctly handles message and function_call items as intended
+
+### Commit grepathy automated documentation update
+Status: directed
+Touches: `.ai/why/master.md`
+
+Committed the grepathy automated documentation update as its own commit following the repository's established convention for tracking architectural decisions, with co-author attribution auto-appended by repo hooks.
+
+### Update CLAUDE.md OpenAI SDK version reference to 4.42.0
+Status: discussed
+Touches: `CLAUDE.md`
+
+The Context7 documentation reference in CLAUDE.md had drifted from the actual version pinned in build.gradle.kts (4.41.0 vs 4.42.0), creating risk of future developer confusion when consulting the documentation to verify API compatibility.
+
+### Add Context7 Responses API implementation guidance to CLAUDE.md
+Status: discussed
+Touches: `CLAUDE.md`
+
+Context7 documentation for the Responses API was incomplete, not explaining that actual class implementations live in openai-java-core (a transitive dependency of openai-java, which ships no classes). Without this knowledge, developers must manually extract sources from the Gradle cache to discover method signatures, creating unnecessary friction.
+
+### Document ./gradlew check gate and 100% method coverage requirement in CLAUDE.md
+Status: discussed
+Touches: `CLAUDE.md`
+
+The real CI gate is `./gradlew check` (not `test`), which enforces 100% method coverage via Jacoco—this requirement was undocumented. Additionally, a pre-existing method-coverage gap (~76% from unexercised TOOL_REGISTRY lambdas) fails the gate on a clean checkout and deserves documentation to prevent future changes from being mistakenly attributed as regressions.
+
+Risk: Documenting the gap without a remediation plan may entrench it; consider pairing with a follow-up issue or note about resolution.
+Reviewer attention: Verify the 76% coverage gap is pre-existing and unrelated to the Responses API migration by running `git stash && ./gradlew check` on a clean checkout.
+
+### Document MockK nested object construction pattern for SDK response object assertions in CLAUDE.md
+Status: discussed
+Touches: `CLAUDE.md`
+
+AgentLoopTest.kt mocks OpenAI SDK response objects with MockK to verify responses via `.toString()` assertions. Nested response objects must be constructed via real `.builder()` chains rather than `mockk<T>()`, as mocked objects render as opaque identifiers in toString() and silently break substring assertions without raising errors—a subtle footgun specific to this testing pattern.
+
+Reviewer attention: Confirm this MockK pattern applies to all similar SDK response object testing in the codebase, not just AgentLoopTest.kt.
