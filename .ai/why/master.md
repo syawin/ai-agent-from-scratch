@@ -455,3 +455,11 @@ Touches: `CLAUDE.md`
 Adds a pointer from CLAUDE.md to the new responses-api-migration-notes memory file, ensuring future sessions discover it automatically via project instructions. Maintains consistency with existing patterns of referencing project-level findings.
 
 Reviewer attention: Verify CLAUDE.md reference is placed appropriately and uses consistent formatting with existing references.
+
+### Run Codex review before committing Responses API migration
+Status: discussed — follows from user's commit request; part of code quality workflow
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`, `src/test/kotlin/com/example/aiagent/AgentLoopTest.kt`, `src/test/kotlin/com/example/aiagent/ServiceRunningTest.kt`, `CLAUDE.md`, `.claude/memory/responses-api-migration-notes.md`
+
+Before committing the Responses API migration work, the agent ran a Codex review to verify no actionable regressions were introduced. The review confirmed that compilation and unit tests passed, with only the pre-existing Jacoco method-coverage gap (76% versus 100% gate) present—not a regression from the migration itself.
+
+Reviewer attention: Verify that the 12 tool implementations maintain their argument contracts and that response output filtering correctly handles message and function_call items as intended
