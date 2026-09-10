@@ -5,16 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.core.JsonValue
-import com.openai.models.FunctionDefinition
-import com.openai.models.FunctionParameters
-import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
-import com.openai.models.chat.completions.ChatCompletionCreateParams
-import com.openai.models.chat.completions.ChatCompletionFunctionTool
-import com.openai.models.chat.completions.ChatCompletionMessageFunctionToolCall
-import com.openai.models.chat.completions.ChatCompletionMessageParam
-import com.openai.models.chat.completions.ChatCompletionMessageToolCall
-import com.openai.models.chat.completions.ChatCompletionTool
-import com.openai.models.chat.completions.ChatCompletionToolMessageParam
+import com.openai.models.responses.EasyInputMessage
+import com.openai.models.responses.FunctionTool
+import com.openai.models.responses.Response
+import com.openai.models.responses.ResponseCreateParams
+import com.openai.models.responses.ResponseFunctionToolCall
+import com.openai.models.responses.ResponseInputItem
+import com.openai.models.responses.ResponseOutputItem
+import com.openai.models.responses.Tool
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.time.Duration
@@ -94,20 +92,20 @@ private val TOOL_REGISTRY: Map<String, (Map<String, Any?>) -> String> =
     )
 
 /**
- * A list of pre-defined tools represented as `ChatCompletionTool` objects, derived from raw schema
+ * A list of pre-defined tools represented as `Tool` objects, derived from raw schema
  * definitions. Each tool's schema is parsed and transformed into a structured representation,
  * encapsulating its function name, description, and parameters.
  *
  * The transformation involves:
  * - Extracting the `function` and its `parameters` from the raw schema.
- * - Constructing a `FunctionParameters` object by mapping schema parameter values.
- * - Building a `FunctionDefinition` object to represent the function metadata.
- * - Wrapping the function metadata in a `ChatCompletionTool` object.
+ * - Constructing a `FunctionTool.Parameters` object by mapping schema parameter values.
+ * - Building a `FunctionTool` object to represent the function metadata.
+ * - Wrapping the function metadata in a `Tool` object.
  *
  * This variable helps streamline the handling of tool schemas within the application, providing
- * a strongly-typed and structured set of tools for chat completion and related tasks.
+ * a strongly-typed and structured set of tools for the Responses API and related tasks.
  */
-private val TOOL_SCHEMAS: List<ChatCompletionTool> =
+private val TOOL_SCHEMAS: List<Tool> =
     // Transforms raw schema definitions into typed tool objects
     getToolSchemas().map { schema ->
         @Suppress("UNCHECKED_CAST")
@@ -117,51 +115,50 @@ private val TOOL_SCHEMAS: List<ChatCompletionTool> =
         val parameters =
             function.getValue("parameters") as Map<String, Any>
         val functionParameters =
-            FunctionParameters
+            FunctionTool.Parameters
                 .builder()
                 .additionalProperties(parameters.mapValues { JsonValue.from(it.value) })
                 .build()
         val definition =
-            // Constructs function definition from schema metadata
-            FunctionDefinition
+            // Constructs function tool definition from schema metadata
+            FunctionTool
                 .builder()
                 .name(function.getValue("name") as String)
                 .description(function.getValue("description") as String)
                 .parameters(functionParameters)
+                .strict(false)
                 .build()
-        ChatCompletionTool.ofFunction(
-            ChatCompletionFunctionTool.builder().function(definition).build(),
-        )
+        Tool.ofFunction(definition)
     }
 
 /**
  * Processes a list of tool call requests, executes corresponding registry functions,
- * and appends the results to the provided mutable list of messages.
+ * and appends the results to the provided mutable list of input items.
  *
- * @param toolCalls A list of tool call requests represented by `ChatCompletionMessageToolCall` instances.
+ * @param toolCalls A list of tool call requests represented by `ResponseOutputItem` instances.
  *                  Each item represents a specific function or tool execution request.
- * @param messages A mutable list of `ChatCompletionMessageParam` to which the results of the tool executions
- *                 will be appended.
+ * @param input A mutable list of `ResponseInputItem` to which the results of the tool executions
+ *              will be appended.
  */
 fun handleToolCalls(
-    toolCalls: List<ChatCompletionMessageToolCall>,
-    messages: MutableList<ChatCompletionMessageParam>,
+    toolCalls: List<ResponseOutputItem>,
+    input: MutableList<ResponseInputItem>,
 ) {
     // Iterates tool requests; invokes registry functions; appends results
-    for (toolCall in toolCalls) {
-        if (!toolCall.isFunction()) {
+    for (item in toolCalls) {
+        if (!item.isFunctionCall()) {
             continue
         }
 
-        val functionCall: ChatCompletionMessageFunctionToolCall = toolCall.asFunction()
-        val name = functionCall.function().name()
+        val functionCall: ResponseFunctionToolCall = item.asFunctionCall()
+        val name = functionCall.name()
         // Executes requested function; captures output or error message
         val result =
             // Executes registry function; captures output or error
             try {
                 val args: Map<String, Any?> =
                     json.readValue(
-                        functionCall.function().arguments(),
+                        functionCall.arguments(),
                         object : TypeReference<Map<String, Any?>>() {},
                     )
 
@@ -174,15 +171,15 @@ fun handleToolCalls(
             }
 
         println("  [tool result] ${result.take(200)}${if (result.length > 200) "..." else ""}")
-        // Encapsulates tool execution result into chat message structure
+        // Encapsulates tool execution result into input item structure
 
-        messages.add(
-            // Encapsulates tool result into chat message parameter
-            ChatCompletionMessageParam.ofTool(
-                ChatCompletionToolMessageParam
+        input.add(
+            // Encapsulates tool result into a function-call-output input item
+            ResponseInputItem.ofFunctionCallOutput(
+                ResponseInputItem.FunctionCallOutput
                     .builder()
-                    .toolCallId(functionCall.id())
-                    .content(result)
+                    .callId(functionCall.callId())
+                    .output(result)
                     .build(),
             ),
         )
@@ -190,25 +187,12 @@ fun handleToolCalls(
 }
 
 /**
- * Executes an interactive agent loop to facilitate conversation between the user and an AI model.
- * Handles user inputs, AI responses, and tool executions within the loop.
- *
- * @param client An instance of `OpenAIClient` used to communicate with the AI model for chat interactions.
- * @param exit A lambda function to terminate the program, typically used for error handling
- *             (default is `exitProcess`).
+ * The system instructions supplied to the model on every request via
+ * `ResponseCreateParams.instructions(...)`. Preserved verbatim from the prior
+ * Chat Completions system message.
  */
-fun agentLoop(
-    client: OpenAIClient,
-    exit: (Int) -> Nothing = ::exitProcess,
-) {
-    val messages =
-        // Initializes conversation with system instructions
-        mutableListOf(
-            ChatCompletionMessageParam.ofSystem(
-                com.openai.models.chat.completions.ChatCompletionSystemMessageParam
-                    .builder()
-                    .content(
-                        """You are a capable coding and research assistant.
+private val SYSTEM_INSTRUCTIONS =
+    """You are a capable coding and research assistant.
 
 ## Available tools
 
@@ -271,25 +255,35 @@ Do not give a final answer based on the task list being empty alone. Before decl
 2. Verification — check the output against the original goal. For code tasks: run the tests or build with run_bash and confirm they pass. For research tasks: re-read the scratchpad and confirm the assembled answer addresses what was actually asked.
 3. Uncertainty check — read the scratchpad and ask: are there unresolved questions, assumptions that were never validated, or tasks that were cancelled rather than properly completed?
 
-If all three are satisfied, give your final answer. If any are not, re-enter the planning loop — add the outstanding items to the todo list and continue.""",
-                    ).build(),
-            ),
-        )
+If all three are satisfied, give your final answer. If any are not, re-enter the planning loop — add the outstanding items to the todo list and continue."""
+        .trimIndent()
+
+/**
+ * Executes an interactive agent loop to facilitate conversation between the user and an AI model.
+ * Handles user inputs, AI responses, and tool executions within the loop.
+ *
+ * @param client An instance of `OpenAIClient` used to communicate with the AI model for chat interactions.
+ * @param exit A lambda function to terminate the program, typically used for error handling
+ *             (default is `exitProcess`).
+ */
+fun agentLoop(
+    client: OpenAIClient,
+    exit: (Int) -> Nothing = ::exitProcess,
+) {
+    // Conversation history, seeded empty — system instructions travel per-request instead
+    val input: MutableList<ResponseInputItem> = mutableListOf()
 
     // Orchestrates interactive user-agent conversation loop
     while (true) {
         print("> ")
-        val input = readlnOrNull() ?: break
-        if (input.trim() == "\\exit") break
-        if (input.isBlank()) continue
+        val userInput = readlnOrNull() ?: break
+        if (userInput.trim() == "\\exit") break
+        if (userInput.isBlank()) continue
 
-        val conversationStart = messages.size
-        messages.add(
-            ChatCompletionMessageParam.ofUser(
-                com.openai.models.chat.completions.ChatCompletionUserMessageParam
-                    .builder()
-                    .content(input)
-                    .build(),
+        val conversationStart = input.size
+        input.add(
+            ResponseInputItem.ofEasyInputMessage(
+                EasyInputMessage.builder().role(EasyInputMessage.Role.USER).content(userInput).build(),
             ),
         )
 
@@ -298,44 +292,52 @@ If all three are satisfied, give your final answer. If any are not, re-enter the
         try {
             // Executes iterative tool-calling loop until final response received
             while (true) {
-                // Configures chat completion request with model and tools
+                // Configures response request with model, tools, and instructions
                 val params =
-                    ChatCompletionCreateParams
+                    ResponseCreateParams
                         .builder()
                         .model("local-model")
-                        .messages(messages)
+                        .inputOfResponse(input)
                         .tools(TOOL_SCHEMAS)
+                        .instructions(SYSTEM_INSTRUCTIONS)
                         .temperature(0.7)
                         .build()
-                val completion = client.chat().completions().create(params)
-                val message = completion.choices().firstOrNull()?.message()
+                val response: Response = client.responses().create(params)
+                val output = response.output()
 
                 // Handles empty model response; logs and persists state
-                if (message == null) {
+                if (output.isEmpty()) {
                     println("(no response)")
-                    messages.add(
-                        ChatCompletionMessageParam.ofAssistant(
-                            ChatCompletionAssistantMessageParam
-                                .builder()
-                                .content("(no response)")
-                                .build(),
+                    input.add(
+                        ResponseInputItem.ofEasyInputMessage(
+                            EasyInputMessage.builder().role(EasyInputMessage.Role.ASSISTANT).content("(no response)").build(),
                         ),
                     )
                     break
                 }
 
-                val toolCalls = message.toolCalls().orElse(emptyList())
-                val assistantMessageBuilder = ChatCompletionAssistantMessageParam.builder()
-                message.content().ifPresent(assistantMessageBuilder::content)
-                if (toolCalls.isNotEmpty()) assistantMessageBuilder.toolCalls(toolCalls)
-                val assistantMessage = assistantMessageBuilder.build()
-                messages.add(ChatCompletionMessageParam.ofAssistant(assistantMessage))
+                // Appends each output item back into the conversation as an input item
+                for (item in output) {
+                    if (item.isFunctionCall()) {
+                        input.add(ResponseInputItem.ofFunctionCall(item.asFunctionCall()))
+                    } else if (item.isMessage()) {
+                        input.add(ResponseInputItem.ofResponseOutputMessage(item.asMessage()))
+                    }
+                }
+
+                val toolCalls = output.filter { it.isFunctionCall() }
 
                 // Executes tool calls or prints content and terminates
                 if (toolCalls.isNotEmpty()) {
-                    handleToolCalls(toolCalls, messages)
+                    handleToolCalls(toolCalls, input)
                 } else {
-                    println(message.content().orElse(""))
+                    val text =
+                        output
+                            .filter { it.isMessage() }
+                            .flatMap { it.asMessage().content() }
+                            .filter { it.isOutputText() }
+                            .joinToString("") { it.asOutputText().text() }
+                    println(text)
                     break
                 }
             }
@@ -347,7 +349,7 @@ If all three are satisfied, give your final answer. If any are not, re-enter the
             exit(1)
         } catch (e: Exception) {
             println("An unexpected error occurred: ${e.message}")
-            while (messages.size > conversationStart) messages.removeLast()
+            while (input.size > conversationStart) input.removeLast()
         }
     }
 }

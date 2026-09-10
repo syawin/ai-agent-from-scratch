@@ -11,6 +11,11 @@ path confinement on file reads. These gaps are acceptable for the project's purp
 not be "fixed" reflexively; see `.claude/memory/future-security-considerations.md` for the
 specific findings and mitigation ideas to revisit if the project's scope ever changes.
 
+The agent talks to the model via the OpenAI Java SDK's Responses API (migrated from Chat
+Completions in September 2026). See `.claude/memory/responses-api-migration-notes.md` for a
+known scoping gap in that migration (non-message/non-function-call output items are silently
+dropped) and when it needs revisiting.
+
 ## Documentation lookups
 
 **Prioritize Context7 when searching for library/framework/API documentation.**

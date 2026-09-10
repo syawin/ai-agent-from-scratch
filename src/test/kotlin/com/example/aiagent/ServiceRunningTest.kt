@@ -2,7 +2,9 @@ package com.example.aiagent
 
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
-import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.responses.EasyInputMessage
+import com.openai.models.responses.ResponseCreateParams
+import com.openai.models.responses.ResponseInputItem
 import org.junit.jupiter.api.Tag
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -20,21 +22,25 @@ class ServiceRunningTest {
                 .build()
 
         val params =
-            ChatCompletionCreateParams
-                .builder()
-                .addSystemMessage("You are a helpful assistant!")
-                .addUserMessage("Say hello.")
-                .model("local-model")
+            ResponseCreateParams.builder()
+                .instructions("You are a helpful assistant!")
+                .inputOfResponse(
+                    listOf(
+                        ResponseInputItem.ofEasyInputMessage(
+                            EasyInputMessage.builder().role(EasyInputMessage.Role.USER).content("Say hello.").build(),
+                        ),
+                    ),
+                ).model("local-model")
                 .build()
 
-        val completion = client.chat().completions().create(params)
+        val response = client.responses().create(params)
         val content =
-            completion
-                .choices()
-                .first()
-                .message()
-                .content()
-                .orElse("")
+            response
+                .output()
+                .filter { it.isMessage() }
+                .flatMap { it.asMessage().content() }
+                .filter { it.isOutputText() }
+                .joinToString("") { it.asOutputText().text() }
         assertFalse(content.isBlank(), "Expected a non-blank response from the service")
     }
 }
