@@ -46,11 +46,6 @@ it directly for ground-truth signatures.
   `jacocoTestCoverageVerification` at 80% line / **100% method** coverage.
   Prefer inline logic over new private helper functions unless you're also
   adding a test that exercises them.
-- A clean checkout currently fails `./gradlew check` on a **pre-existing**
-  method-coverage gap (~76%, from `TOOL_REGISTRY` lambdas — e.g.
-  `read_scratchpad`/`todo_*` — never exercised via `AgentLoopTest`). This
-  predates any given change; verify with `git stash` before assuming you
-  caused it.
 - When mocking OpenAI SDK response objects with MockK for assertions that
   check `.toString()` (see `AgentLoopTest.kt`), build nested objects (e.g.
   `ResponseOutputMessage`, `ResponseFunctionToolCall`) via their real

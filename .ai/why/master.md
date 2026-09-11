@@ -1,6 +1,6 @@
 # Why: master
 
-<!-- grepathy:v1 generated 2026-09-10 — review before sharing; edit freely, edits are preserved -->
+<!-- grepathy:v1 generated 2026-09-11 — review before sharing; edit freely, edits are preserved -->
 
 ## Intent
 Add core agent tools (bash, file read, glob, grep) and document security considerations for a learning-stage AI agent implementation.
@@ -498,3 +498,72 @@ Touches: `CLAUDE.md`
 AgentLoopTest.kt mocks OpenAI SDK response objects with MockK to verify responses via `.toString()` assertions. Nested response objects must be constructed via real `.builder()` chains rather than `mockk<T>()`, as mocked objects render as opaque identifiers in toString() and silently break substring assertions without raising errors—a subtle footgun specific to this testing pattern.
 
 Reviewer attention: Confirm this MockK pattern applies to all similar SDK response object testing in the codebase, not just AgentLoopTest.kt.
+
+### Launch Explore agents before planning to map coverage gaps and test conventions
+Status: discussed — plan mode implies upfront information gathering
+Touches: `src/main/kotlin/**`, `src/test/kotlin/**`, `build.gradle.kts`
+
+Two independent Explore agents gathered ground-truth data before design: one pinpointed the exact 16 uncovered methods (52 of 68 covered, 76% vs. 100% METHOD target) by running the build and parsing JaCoCo XML, and cross-referenced them to five TOOL_REGISTRY lambdas; the other mapped test framework versions (JUnit 5, MockK 1.14.2), existing test patterns, and the MockK SDK object construction strategy already in use in AgentLoopTest. This ensured the plan would be grounded in current codebase state rather than assumptions.
+
+Risk: Adds upfront execution time, but prevents plan-based surprises downstream.
+
+### Implement tests for TOOL_REGISTRY dispatch and wrapper functions
+Status: discussed — User's explore-then-design workflow direction implies test implementation follows exploration findings
+Touches: `src/test/kotlin/com/example/aiagent/ToolsTest.kt`, `src/test/kotlin/com/example/aiagent/AgentLoopTest.kt`
+
+Exploration identified 16 uncovered methods (76% vs required 100% method coverage) located entirely in untested tool paths: read_scratchpad, write_scratchpad, todo_append, todo_list, and todo_update TOOL_REGISTRY lambdas (5); their Tools.kt wrapper functions plus default-arg overloads (10); Scratchpad class read and write methods (2). Root cause is TOOL_REGISTRY dispatch paths and wrapper layer never exercised through tests. Implementation will add tests using established patterns: JUnit 5 via kotlin.test, MockK 1.14.2, real I/O for tool functions, temp file cleanup, and integration with existing ToolsTest and AgentLoopTest.
+
+Considered/rejected: Rejected extending ToDoListTest further; coverage gap requires testing TOOL_REGISTRY lambdas and wrapper layer between registry and ToDoList, not the underlying ToDoList class itself (already 100% covered).
+Risk: Tests must safely isolate shared singleton state (scratchpad and todoStore); inadequate isolation could cause test interference.
+Reviewer attention: Confirm test plan addresses all 16 methods, uses kotlin.test assertions, reuses existing MockK patterns, safely manages singleton isolation without production code changes, and verifies coverage meets thresholds.
+
+### Parallelize test implementation via three developer agents with non-overlapping file ownership and disjoint ID ledger
+Status: agent-initiated — not requested in plan or prompts
+Touches: `src/test/kotlin/com/example/aiagent/ScratchpadTest.kt`, `src/test/kotlin/com/example/aiagent/ToolsTest.kt`, `src/test/kotlin/com/example/aiagent/AgentLoopTest.kt`
+
+The agent orchestrated three independent developer agents to work in parallel, each owning a single test file and a pre-assigned disjoint set of todo-item IDs (90001–90002 for ToolsTest, 90010–90013 for todoList tests, 90101–90103 for retry tests, 90201 for AgentLoopTest) to prevent collisions in the shared singleton-state scenario. This isolation strategy avoids build-directory contention from concurrent `gradlew test` runs and reduces risk by localizing each dev's scope.
+
+Risk: Concurrent invocations of `gradlew test` can corrupt JaCoCo's shared `build/jacoco/test.exec` state, producing false-positive coverage misses; one dev agent observed this (getScratchpad, getTodoStore, todoList$default, todoUpdate$default incorrectly shown as 0% covered in isolated runs), but a final `./gradlew clean check` in isolation confirmed all methods were truly covered (68/68).
+Reviewer attention: Verify the clean-build JaCoCo report shows all four property getters and synthetic bridges with covered=1, confirming no concurrency corruption in the final state.
+
+### Create ScratchpadTest.kt exercising Scratchpad class directly with fresh instances
+Status: discussed
+Touches: `src/test/kotlin/com/example/aiagent/ScratchpadTest.kt`
+
+A new test file was created to directly unit-test the Scratchpad class (two methods, four tests covering: empty-state placeholder '(empty)', content round-trip, whitespace trimming, and content replacement). Fresh Scratchpad() instances per test isolate from the shared singleton in Tools.kt, eliminating order-dependency risk and matching the test-fixture pattern used in ToDoListTest.
+
+Reviewer attention: Confirm all four test methods exercise both branches of Scratchpad.read() (empty and non-empty cases) and the full Scratchpad.write() path including trimming.
+
+### Update CLAUDE.md to remove stale coverage-gap note
+Status: discussed
+Touches: `CLAUDE.md`
+
+The existing CLAUDE.md documentation (lines 49–53) recorded the JaCoCo coverage gap as a known pre-existing failure ("currently fails ./gradlew check on a pre-existing method-coverage gap (~76%...)"). Once test implementation and verification were complete, this note became stale and was removed, simplifying the project memory for future developers and eliminating misleading guidance.
+
+Reviewer attention: Verify the removed text was only the specific stale coverage-gap note and no other project-memory content was altered.
+
+### Run clean build to verify coverage after parallel agent runs
+Status: agent-initiated — not requested in plan or prompts
+Touches: `build/`, `build.gradle.kts`
+
+After three parallel developer agents completed their test additions independently, one agent reported that isolated class-scoped test runs showed false-positive coverage misses (getScratchpad, getTodoStore, todoList$default, todoUpdate$default marked as missed despite bytecode analysis confirming the tests invoked them). To rule out JaCoCo-state corruption from concurrent `gradlew test` runs as the cause, the agent ran `./gradlew clean check` in isolation, which confirmed 68/68 methods covered (100% coverage achieved), proving the transient misses were artifacts of concurrent execution not a real coverage gap.
+
+Risk: None; this verification added confidence without introducing additional risk.
+Reviewer attention: Confirm the final clean-build JaCoCo report shows METHOD counter with missed=0, covered=68.
+
+### Dispatch fresh-context independent reviewer before declaring task complete
+Status: agent-initiated — not requested in plan or prompts
+Touches: `src/test/kotlin/com/example/aiagent/**`, `CLAUDE.md`
+
+Before declaring the task complete, an independent reviewer (with no context from the planning or development phases) was dispatched to verify the test diff for correctness, assertion precision, test ordering safety, and to re-run the full build themselves. This provides an outside-eye verification gate that confirms the work meets requirements without relying on the planner's own assessment.
+
+Risk: None; adds review thoroughness and catches issues the planner might have missed.
+
+### Accept independent verification confirming 100% METHOD coverage gate passes with no defects
+Status: discussed
+Touches: `ScratchpadTest.kt`, `ToolsTest.kt`, `AgentLoopTest.kt`
+
+An independent reviewer verified the three-agent test implementation empirically by running a full ./gradlew clean check, obtaining 100% METHOD coverage (68/68 methods), hand-tracing all 54 new assertions against production code in Tools.kt/ToDoList.kt/Main.kt, and confirming no issues found. Verification included step-by-step correctness checks of retry-count logic and JSON type-casting in tool dispatches. Cross-test contamination was ruled out through id audit (ToolsTest uses ids 90001–90103, AgentLoopTest uses 90201, with no collisions; shared singleton state is accessed only within single test bodies). Individual test classes were run in isolation and all pass; full-suite run showed LINE coverage 99.14%, exceeding the 80% gate.
+
+Considered/rejected: Bytecode reasoning alone without empirical coverage validation; accepting isolated test runs that initially showed false-positive coverage gaps due to shared build artifact contention—resolved by full-suite rerun.
+Reviewer attention: ToolsTest.kt:261 (scratchpad.read()) and :279 (todoStore.contains()) are sole call sites forcing getScratchpad()/getTodoStore() coverage; future simplifications must preserve these or accept gate re-opening. Sequential JUnit 5 execution (no parallelism configured in build.gradle.kts) makes back-to-back todoList() assertions safe; parallel execution would require refactoring.
