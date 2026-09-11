@@ -216,6 +216,11 @@ class AgentLoopTest {
                     "write_file" to mapOf("path" to written.toString(), "content" to "old value"),
                     "edit_file" to mapOf("path" to written.toString(), "old_string" to "old", "new_string" to "new"),
                     "webfetch" to mapOf("url" to "http://127.0.0.1:${server.address.port}/"),
+                    "write_scratchpad" to mapOf("content" to "registry scratchpad result"),
+                    "read_scratchpad" to emptyMap<String, Any>(),
+                    "todo_append" to mapOf("id" to 90201, "content" to "registry todo result", "status" to "pending"),
+                    "todo_list" to mapOf("include_completed" to false),
+                    "todo_update" to mapOf("id" to "90201", "status" to "in_progress"),
                 )
             val responses =
                 calls.mapIndexed { index, (name, arguments) ->
@@ -231,6 +236,19 @@ class AgentLoopTest {
             assertContains(output, "registry file result")
             assertContains(output, "registry web result")
             assertEquals("new value", Files.readString(written))
+            assertContains(output, "Successfully written content into scratchpad")
+            // Must check the "[tool result]" line specifically, not a bare substring: handleToolCalls
+            // echoes the raw args map via "[tool] write_scratchpad({content=registry scratchpad result})"
+            // *before* invoking the tool, so a plain substring check for "registry scratchpad result"
+            // would pass even if read_scratchpad were broken and returned "(empty)".
+            assertContains(output, "[tool result] registry scratchpad result")
+            assertContains(output, "Successfully appended to do item 90201 in to do list!")
+            // todoList's full output depends on the accumulated global item count across all tests, which
+            // is not deterministic across the whole test suite — but the tool always prints "To Do List ("
+            // as the first literal characters of its (possibly truncated) result, so this substring is
+            // order-independent proof the tool dispatched and returned a well-formed report.
+            assertContains(output, "[tool result] To Do List (")
+            assertContains(output, "Successfully updated to do item 90201!")
             assertContains(output, "All tools completed")
             verify(exactly = responses.size) { responseService.create(any<ResponseCreateParams>()) }
         } finally {
