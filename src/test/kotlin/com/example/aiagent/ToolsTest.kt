@@ -8,6 +8,7 @@ import java.util.UUID
 import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteIfExists
 import kotlin.test.Test
+import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -245,6 +246,125 @@ class ToolsTest {
         val url = "file:///tmp/example.html"
 
         assertEquals("Error fetching $url: unsupported scheme 'file'.", webfetch(url))
+    }
+
+    // --- Scratchpad tool tests ---
+
+    @Test
+    fun `writeScratchpad stores trimmed content and returns a fixed confirmation message`() {
+        val marker = "scratchpad-${UUID.randomUUID()}"
+        val result = writeScratchpad("  $marker  \n")
+        assertEquals("Successfully written content into scratchpad", result)
+        assertEquals(marker, readScratchpad())
+        // Cross-file access forces the call through ToolsKt.getScratchpad()'s public accessor —
+        // same-file access inside Tools.kt compiles to a direct getstatic and doesn't cover it.
+        assertEquals(marker, scratchpad.read())
+    }
+
+    @Test
+    fun `readScratchpad reflects the most recent write`() {
+        val marker = "scratchpad-${UUID.randomUUID()}"
+        writeScratchpad(marker)
+        assertEquals(marker, readScratchpad())
+    }
+
+    // --- todoAppend tests ---
+
+    @Test
+    fun `todoAppend succeeds and reports the new item id`() {
+        val id = 90001
+        val result = todoAppend(id, "write coverage test", TaskStatus.PENDING.wire)
+        assertEquals("Successfully appended to do item $id in to do list!", result)
+        // Cross-file access forces ToolsKt.getTodoStore()'s public accessor, same reasoning as above.
+        assertTrue(todoStore.contains("$id"))
+    }
+
+    @Test
+    fun `todoAppend reports a failure for a duplicate id`() {
+        val id = 90002
+        todoAppend(id, "first", TaskStatus.PENDING.wire)
+        val result = todoAppend(id, "second", TaskStatus.PENDING.wire)
+        assertEquals("Failed to append to do item: To do item with id $id already exists.", result)
+    }
+
+    // --- todoList tests ---
+
+    @Test
+    fun `todoList reports a freshly appended pending item`() {
+        val id = 90010
+        todoAppend(id, "check todoList coverage", TaskStatus.PENDING.wire)
+        assertContains(todoList(false), "[$id] check todoList coverage (pending)")
+    }
+
+    @Test
+    fun `todoList hides completed items by default but includes them when requested`() {
+        val id = 90012
+        todoAppend(id, "finish todoList coverage", TaskStatus.PENDING.wire)
+        todoUpdate("$id", status = TaskStatus.DONE)
+        assertFalse(todoList(false).contains("[$id]"))
+        assertContains(todoList(true), "[$id] finish todoList coverage (done)")
+    }
+
+    @Test
+    fun `todoList with omitted argument defaults to excluding completed items`() {
+        val id = 90013
+        todoAppend(id, "default-bridge fixture", TaskStatus.PENDING.wire)
+        todoUpdate("$id", status = TaskStatus.DONE)
+        // todoList() with the argument omitted routes through the synthetic todoList$default bridge.
+        assertEquals(todoList(false), todoList())
+        assertFalse(todoList().contains("[$id]"))
+    }
+
+    // --- todoUpdate tests ---
+
+    @Test
+    fun `todoUpdate returns a no-op message when neither content nor status is given`() {
+        assertEquals(
+            "No content or status was given to update. Nothing to do.",
+            todoUpdate("id-that-is-never-created-${UUID.randomUUID()}"),
+        )
+    }
+
+    @Test
+    fun `todoUpdate reports a failure for an unknown id`() {
+        val id = "missing-${UUID.randomUUID()}"
+        assertEquals(
+            "Failed to update to do item $id: To do item with id $id not found",
+            todoUpdate(id, content = "anything"),
+        )
+    }
+
+    @Test
+    fun `todoUpdate updates content without changing status`() {
+        val id = "90103"
+        todoAppend(id.toInt(), "content v1", TaskStatus.PENDING.wire)
+        assertEquals("Successfully updated to do item $id!", todoUpdate(id, content = "content v2"))
+    }
+
+    @Test
+    fun `todoUpdate reports the retry count when a failed item resumes in_progress`() {
+        val id = "90101"
+        todoAppend(id.toInt(), "flaky task", TaskStatus.PENDING.wire)
+        todoUpdate(id, status = TaskStatus.FAILED)
+        val message = todoUpdate(id, status = TaskStatus.IN_PROGRESS)
+        assertEquals("Successfully updated to do item $id! Retry attempt 1 of $RETRY_LIMIT.", message)
+    }
+
+    @Test
+    fun `todoUpdate reports when the retry limit has been reached`() {
+        val id = "90102"
+        todoAppend(id.toInt(), "very flaky task", TaskStatus.PENDING.wire)
+        repeat(RETRY_LIMIT - 1) {
+            todoUpdate(id, status = TaskStatus.FAILED)
+            todoUpdate(id, status = TaskStatus.IN_PROGRESS)
+        }
+        todoUpdate(id, status = TaskStatus.FAILED)
+        val message = todoUpdate(id, status = TaskStatus.IN_PROGRESS)
+        assertEquals(
+            "Updated to do item $id to in_progress — but this is retry $RETRY_LIMIT of $RETRY_LIMIT " +
+                "(retry limit reached). Do not retry again. Escalate to the user instead.",
+            message,
+        )
     }
 
     private fun withHttpResponse(
