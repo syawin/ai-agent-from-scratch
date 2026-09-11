@@ -425,13 +425,13 @@ After migration, ./gradlew check reported 0.76 method coverage (gate requires 1.
 
 Risk: Method coverage remains below gate threshold; separate effort required to add test coverage for those lambdas or adjust the coverage gate.
 
-### Dispatch three parallel developer agents with non-overlapping file ownership
-Status: agent-initiated — not requested; agent chose parallelization to speed implementation while avoiding concurrent edits to same file
-Touches: `src/main/kotlin/com/example/aiagent/Main.kt`, `src/test/kotlin/com/example/aiagent/AgentLoopTest.kt`, `src/test/kotlin/com/example/aiagent/ServiceRunningTest.kt`
+### Dispatch three parallel developer agents to implement files with non-overlapping ownership
+Status: agent-initiated — tactical execution strategy; not requested or discussed in original task
+Touches: `.claude/skills/verifying-change-impact/SKILL.md`, `.claude/skills/verifying-change-impact/references/repo-facts.md`, `.claude/skills/verifying-change-impact/references/contract-map.md`
 
-Three independent developer agents were dispatched in parallel to migrate Main.kt, AgentLoopTest.kt, and ServiceRunningTest.kt respectively. File ownership was strictly non-overlapping. Each agent was instructed to report compiler issues (transient Kotlin-daemon failures from concurrent edits by another agent) rather than attempt fixes. After all three completed, full integration verification (./gradlew check) was run to catch regressions.
+Strategy parallelizes file implementation by dividing ownership: one agent on repo-facts.md (repository-specific volatile facts with live verification), one on contract-map.md (contract seams and known-gap pointers, self-checked against volatile-fact restating), one on SKILL.md (procedure). Each developer received exact pre-approved frontmatter and structure from design plan to prevent improvised cross-cutting changes.
 
-Risk: Transient Kotlin-daemon compilation errors occurred while one agent edited Main.kt during another agent's compile window, but Gradle's non-daemon fallback resolved this automatically. Risk was well-understood and Gradle's robustness handled it.
+Risk: If repo-facts.md developer assumes rather than runs verification commands, or contract-map.md developer embeds volatile facts from repo-facts.md instead of referencing them, reference files will become stale and inconsistent. Mitigation: each developer brief includes requirement to paste verbatim command + output and to self-check against forbidden volatile facts in contract-map.
 
 ### Document response output-item filtering as known limitation for future backend changes
 Status: directed — User explicitly requested to note limitation as blind-spot; implementation approach was agent-determined
@@ -567,3 +567,118 @@ An independent reviewer verified the three-agent test implementation empirically
 
 Considered/rejected: Bytecode reasoning alone without empirical coverage validation; accepting isolated test runs that initially showed false-positive coverage gaps due to shared build artifact contention—resolved by full-suite rerun.
 Reviewer attention: ToolsTest.kt:261 (scratchpad.read()) and :279 (todoStore.contains()) are sole call sites forcing getScratchpad()/getTodoStore() coverage; future simplifications must preserve these or accept gate re-opening. Sequential JUnit 5 execution (no parallelism configured in build.gradle.kts) makes back-to-back todoList() assertions safe; parallel execution would require refactoring.
+
+### Structure skill as SKILL.md with two reference files (repo-facts.md, contract-map.md)
+Status: discussed
+Touches: `.claude/skills/verifying-change-impact/SKILL.md`, `.claude/skills/verifying-change-impact/references/repo-facts.md`, `.claude/skills/verifying-change-impact/references/contract-map.md`
+
+Rejected a scripts/ helper pattern (which would create a second durable artifact requiring its own maintenance) in favor of prose documentation with embedded re-verification commands. Reference files isolate volatile facts (Gradle commands, test file locations, coverage thresholds, symbol positions) from stable procedure (SKILL.md), enabling updates only to affected reference sections when code/build config changes, mirroring the .claude/memory/ living-document convention.
+
+Considered/rejected: Alternative of implementing a scripts/ helper or separate drift-check file would replicate the rot-prevention problem at a lower level. Alternative of single monolithic SKILL.md would mix volatile facts (requiring frequent updates) with stable procedure (enabling efficient drift detection only via per-fact re-verification).
+Reviewer attention: Verify that no volatile fact (Gradle task name, test count, version, threshold value, symbol location) appears in SKILL.md prose or inline comments — all volatile facts must live in references/ with re-verification commands.
+
+### Implement five-phase verification workflow grounded in repository structure and documented guidance
+Status: discussed
+Touches: `.claude/skills/verifying-change-impact/SKILL.md`
+
+Design workflow as: Phase 1 map impact/contracts/risk using contract-map.md; Phase 2 inspect CLAUDE.md/.ai/why/ for design rationale before choosing checks; Phase 3 select proportionate checks based on change class; Phase 4 execute required gate plus targeted checks; Phase 5 report honestly with structured table (no category omitted). Grounded in this repository's actual test suite structure, build configuration, and documented known-gaps rather than generic "run all tests" guidance.
+
+### Store re-verification commands alongside facts in reference files, making drift-checking mechanical
+Status: discussed
+Touches: `.claude/skills/verifying-change-impact/references/repo-facts.md`, `.claude/skills/verifying-change-impact/references/contract-map.md`
+
+Reference files include a Re-verify column with runnable commands (grep patterns, Gradle invocations, actual command + expected output pattern) on the same row as each volatile fact. Drift-checking becomes command execution and output comparison rather than subjective judgment, eliminating "who checks the checker" cascades and mirroring .claude/memory/*.md pattern of embedding update procedures in living documents.
+
+Risk: If re-verification commands become stale (e.g. symbol renamed), drift detection fails and facts drift unnoticed. Mitigation: drift-check procedure itself verifies by actually running commands each time and comparing output.
+
+### Define escalation table forbidding gate-gaming and routing design questions to user
+Status: discussed
+Touches: `.claude/skills/verifying-change-impact/SKILL.md`
+
+Escalation rules explicitly forbid three gate-bypass shortcuts: inlining code solely to dodge coverage requirements, writing assertion-free tests to inflate coverage numbers, weakening or disabling gate rules. Changes touching documented known-gap areas (unsandboxed tool execution, Responses API dispatch) must trigger a mandatory read of the linked .claude/memory/ file before treating gaps as bugs. Ambiguous scope or design questions route to the user as decision points rather than silent self-remediation.
+
+### Keep SKILL.md procedure generic; express volatile facts and mappings only in references/
+Status: discussed
+Touches: `.claude/skills/verifying-change-impact/SKILL.md`, `.claude/skills/verifying-change-impact/references/`
+
+Procedure — the five phases, escalation rules, reporting template — is stable across repository states and contains no hardcoded facts. All concrete facts (Gradle command names, test file locations, symbol positions, coverage thresholds, check-to-file-class mappings) live in reference files only, ensuring that a build.gradle.kts change updates only reference/ files, not SKILL.md prose.
+
+### Embed maintenance triggers and drift-check procedure in SKILL.md rather than separate file
+Status: discussed
+Touches: `.claude/skills/verifying-change-impact/SKILL.md`
+
+Inline `## Maintenance` section specifies conditions triggering updates (build.gradle.kts task changes, test framework updates, .claude/memory/ file additions or revisit triggers met) and enforces evidence-backed edits (literal command output, not assumptions). Inline drift-check subsection lists re-verification commands for facts, run at each maintenance trigger and proactively at skill invocation if source files are newer than references.
+
+### Name skill `verifying-change-impact` to maintain distinct identity from verification-before-completion
+Status: discussed
+Touches: `.claude/skills/verifying-change-impact/`
+
+Chose kebab-case gerund name following established convention (writing-plans, requesting-code-review, using-git-worktrees) and avoided `verification-*` prefix to ensure readability distinct from superpowers:verification-before-completion in skill listings. Skill documentation clarifies layer separation: verification-before-completion is generic discipline (don't claim success without running the check); this skill decides *which* checks matter and *how proportionate coverage looks* using repository evidence.
+
+### Organize verification facts in repo-facts.md as single source of truth with re-verify commands
+Status: discussed
+Touches: `.claude/skills/verifying-change-impact/references/repo-facts.md`
+
+Every volatile fact (file locations, threshold values, command outputs) the skill references is stored in a single table with the exact command used to verify it. No other skill file restates these facts; all point back to repo-facts.md instead. Every row was validated by actually running its re-verify command before being written. This design prevents the skill from becoming a second copy of facts that drift out of sync with the repository.
+
+Risk: A future maintainer might update a fact without re-running its verification command, creating silent drift between the stated value and actual repository state.
+Reviewer attention: Confirm that every row in repo-facts.md has a 'Fact | Source | Re-verify with' entry and that the re-verify command produces output matching the stated fact.
+
+### Keep contract-map.md narrative-only, referencing repo-facts.md rather than duplicating facts
+Status: discussed
+Touches: `.claude/skills/verifying-change-impact/references/contract-map.md`
+
+contract-map.md documents conceptual seams (tool-registry triangle, error conventions, known-gap areas) without restating numeric facts or command outputs — only cross-references to repo-facts.md rows. Validated with a grep scan for volatile patterns (percentages, line numbers, version strings) that returned no matches, confirming no facts leaked into narrative.
+
+Risk: A reader might manually copy information from this file without checking linked repo-facts.md, obtaining outdated facts if the repository has changed since the skill's last maintenance.
+
+### Define six-phase verification workflow with mandatory evidence-gathering before check selection
+Status: discussed
+Touches: `.claude/skills/verifying-change-impact/SKILL.md`
+
+Verification procedure flows through six ordered phases: (1) map impact, contracts, and risk using concrete file changes; (2) inspect CLAUDE.md, design-rationale history, and build config before choosing checks; (3) select proportionate checks using the change-class-to-breadth table in contract-map.md; (4) execute the required gate and focused checks; (5) report results via a fixed-format table with four status values; (6) stop and escalate per the escalation table. The ordering ensures evidence-gathering before check selection and prevents claiming success without actually running commands in the current session.
+
+Considered/rejected: A single-command approach (always run ./gradlew check) was rejected because it would not account for proportionality or design history, routinely over-verifying trivial changes and under-verifying contract-touching changes.
+Risk: An agent might skip phases 1–2 and jump to running checks, leading to inappropriate verification breadth.
+
+### Define four distinct verification-status values to prevent silent collapse of 'could not run' into 'skipped'
+Status: discussed
+Touches: `.claude/skills/verifying-change-impact/SKILL.md`
+
+Reports must use exactly four status values with explicit definitions: 'Passed' (ran this session, output confirms); 'Failed' (ran this session, output contradicts); 'Skipped' (deliberately not run, out of scope); 'Could not run' (required but blocked by environment/tooling, must state reason). The schema explicitly forbids conflating 'could not run' with 'skipped' — a check blocked by a missing service is reported with the specific blocker, never silently omitted.
+
+Risk: A verification report can appear green while a required check was never attempted, if 'could not run' is conflated with 'skipped' or omitted.
+Reviewer attention: Verify that the report includes a row for every check applicable to the change class, and that any 'could not run' status includes the specific reason the check could not run.
+
+### Establish forbidden gate-gaming shortcuts as explicit escalation triggers
+Status: discussed
+Touches: `.claude/skills/verifying-change-impact/SKILL.md`
+
+Three code-change tactics that circumvent verification are explicitly forbidden and trigger escalation: (1) restructuring code solely to change what the gate measures; (2) writing assertion-free tests whose only purpose is coverage credit; (3) weakening or disabling the gate's rules. Each shortcut is named in Phase 4 and Phase 6 to prevent an agent from silently applying one while claiming verification success.
+
+Risk: An agent might rationalize one of these shortcuts as acceptable if the prohibition is not explicit.
+Reviewer attention: If a verification fails Phase 4, confirm the proposed next action is not one of these three shortcuts.
+
+### Define maintenance update triggers and drift-check procedure for references/ files
+Status: discussed
+Touches: `.claude/skills/verifying-change-impact/SKILL.md`
+
+Maintenance section lists five concrete update triggers (build config changes, tool-registry shape changes, known-gap 'revisit when' conditions being met, test/CI/lint setup changes, drift-check mismatches) and a two-step procedure: (1) edit only the affected row, append a verification note with date and command; (2) edit SKILL.md itself only if the procedure changes, not facts. A drift-check subsection documents re-running every command in repo-facts.md's 'Re-verify with' column with a heuristic for when it's worth doing (when source files are newer than references/).
+
+Risk: A future maintainer might update references/ without re-verifying, or might forget to run drift checks when the repository changes.
+Reviewer attention: Before using this skill to verify a high-stakes change, run the drift-check procedure to confirm references/repo-facts.md is current against the actual repository.
+
+### Add CLAUDE.md pointer to the new skill for discoverability
+Status: discussed — Minor discoverability edit following existing pattern for .claude/memory/ cross-links
+Touches: `CLAUDE.md`
+
+Added a one-line pointer in the Testing section of CLAUDE.md referencing the verifying-change-impact skill, mirroring the existing pattern for design-rationale cross-references. This makes the skill discoverable to other agents and humans reading CLAUDE.md for guidance on verification practices.
+
+### Validate all three skill files with isolated gate run, actual integration-test execution, and reference checks
+Status: discussed
+Touches: `.claude/skills/verifying-change-impact/SKILL.md`, `.claude/skills/verifying-change-impact/references/repo-facts.md`, `.claude/skills/verifying-change-impact/references/contract-map.md`
+
+Implementation was validated by running: (1) the required gate `./gradlew clean check` in isolation, which passed in 5 seconds; (2) the integration test `./gradlew integrationTest`, which actually executed against a live LM Studio instance instead of being assumed unrunnable, and passed in 3.84 seconds; (3) file-existence verification via ls and cross-reference checks via grep. Every fact in repo-facts.md was verified by running its stated re-verify command before the row was written.
+
+Risk: The final JaCoCo report was not manually inspected; concurrent test runs earlier in development produced false-positive coverage misses due to shared build/jacoco/test.exec state, so the final isolated state should be confirmed.
+Reviewer attention: Confirm the final JaCoCo report shows METHOD counter with missed=0, covered=68, per the documented concurrent-execution gotcha in repo-facts.md.

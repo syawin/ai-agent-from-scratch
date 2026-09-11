@@ -51,6 +51,10 @@ it directly for ground-truth signatures.
   `ResponseOutputMessage`, `ResponseFunctionToolCall`) via their real
   `.builder()` chains, not `mockk<T>()` — a mocked object renders as an
   opaque identifier in `toString()` and silently breaks substring assertions.
+- Before or after a change that could break existing behavior (a tool added/
+  removed/renamed, a change under `src/main/kotlin`, a claim that tests or
+  coverage pass), use the `verifying-change-impact` skill
+  (`.claude/skills/verifying-change-impact/`) to scope and report verification.
 
 <!-- grepathy:begin -->
 ## Design reasoning lives in `.ai/why/`
