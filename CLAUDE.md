@@ -78,3 +78,7 @@ Commits titled `grepathy: update why-pack (…)` are written by the tool (the
 why-pack only, via a scratch index — they never touch your staged work). They're
 safe to rebase past or drop; don't amend them into your feature commits.
 <!-- grepathy:end -->
+
+<!-- theboringoffice charter -->
+@.opencode/oikonomos.md
+<!-- /theboringoffice charter -->
