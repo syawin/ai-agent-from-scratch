@@ -1,6 +1,6 @@
 # Why: master
 
-<!-- grepathy:v1 generated 2026-09-11 — review before sharing; edit freely, edits are preserved -->
+<!-- grepathy:v1 generated 2026-09-12 — review before sharing; edit freely, edits are preserved -->
 
 ## Intent
 Add core agent tools (bash, file read, glob, grep) and document security considerations for a learning-stage AI agent implementation.
@@ -682,3 +682,30 @@ Implementation was validated by running: (1) the required gate `./gradlew clean 
 
 Risk: The final JaCoCo report was not manually inspected; concurrent test runs earlier in development produced false-positive coverage misses due to shared build/jacoco/test.exec state, so the final isolated state should be confirmed.
 Reviewer attention: Confirm the final JaCoCo report shows METHOD counter with missed=0, covered=68, per the documented concurrent-execution gotcha in repo-facts.md.
+
+### Split test-verification rule by change type: purely additive vs. removal/weakening
+Status: discussed — Codex feedback identified the rule conflated two risk profiles
+Touches: `.claude/skills/verifying-change-impact/references/contract-map.md`
+
+The original 'Test-only change' verification rule applied a scoped test run (affected test class/file) uniformly to all test-only changes. This was unsafe: when a change removes or weakens existing assertions or test methods, the scoped run never invokes jacocoTestCoverageVerification—only the full ./gradlew check does—so it silently misses coverage drops. The agent split the rule into two cases: purely additive test changes (new test files/methods only) can use the narrower scope since they can only add coverage; changes that delete assertions, disable tests, or narrow filters must run the full gate to catch coverage decreases. This preserves the repo's enforced 100% method coverage requirement.
+
+Considered/rejected: Keeping a single rule that applied to all test-only changes risked allowing coverage drops to escape detection when existing tests are weakened or removed.
+Reviewer attention: Verify this policy correctly distinguishes which test changes can safely use scoped verification. The critical constraint is that scoped test runs do not invoke jacocoTestCoverageVerification, so any test change that could reduce coverage must use the full gate.
+
+### Use symlink to synchronize CLAUDE.md with JetBrains AI Assistant rules
+Status: directed
+Touches: `.aiassistant/rules/CLAUDE.md`, `CLAUDE.md`
+
+A symlink from .aiassistant/rules/CLAUDE.md to ../../CLAUDE.md was created to keep the AI rules file current by construction. This eliminates staleness windows inherent in copy-based sync mechanisms like git hooks or file watchers, where the copy could diverge from the source during the time window between change and sync execution. The symlink is verified to resolve correctly and read the actual CLAUDE.md content.
+
+Considered/rejected: Copy-based approaches with sync mechanisms (git hooks, file watchers) were rejected because such mechanisms necessarily have a staleness window; a symlink is guaranteed current by filesystem semantics.
+Risk: JetBrains AI Assistant may require special frontmatter (e.g., `apply: always`) beyond plain CLAUDE.md for the rule to load. Additionally, if AI Assistant caches rules in memory rather than re-reading per-request, users may need to reload the project after editing CLAUDE.md for changes to take effect.
+Reviewer attention: Verify that JetBrains AI Assistant recognizes and loads the symlinked CLAUDE.md rule file. If the IDE requires special frontmatter, a thin wrapper file may be needed. Confirm the caching behavior — whether rules are re-read on each request or only on project load.
+
+### Link project CLAUDE.md only, excluding user-level configuration
+Status: agent-initiated — not requested in plan or prompts
+Touches: `.aiassistant/rules/CLAUDE.md`
+
+The symlink targets the project's CLAUDE.md exclusively, deliberately excluding user-level configuration (~/.CLAUDE.md and imported oikonomos manager-protocol charter). User-level configurations address subagent dispatch and represent user preferences across all projects, not project-specific concerns, and should not be committed to the repository or referenced from project-scoped AI rules.
+
+Risk: If user-level CLAUDE.md contains guidance applicable to this project, it will not be available to JetBrains AI Assistant through this symlink configuration. Users must manually copy any user-level overrides into the repository's CLAUDE.md if they apply to specific projects.
