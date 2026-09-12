@@ -709,3 +709,57 @@ Touches: `.aiassistant/rules/CLAUDE.md`
 The symlink targets the project's CLAUDE.md exclusively, deliberately excluding user-level configuration (~/.CLAUDE.md and imported oikonomos manager-protocol charter). User-level configurations address subagent dispatch and represent user preferences across all projects, not project-specific concerns, and should not be committed to the repository or referenced from project-scoped AI rules.
 
 Risk: If user-level CLAUDE.md contains guidance applicable to this project, it will not be available to JetBrains AI Assistant through this symlink configuration. Users must manually copy any user-level overrides into the repository's CLAUDE.md if they apply to specific projects.
+
+### Implement SessionStart(compact) hook to restore file-activity context after compaction
+Status: discussed
+Touches: `.claude/hooks/compact-context-summary.py`, `.claude/settings.json`
+
+The agent implemented a Python-based SessionStart hook that activates when the session is compacted (source='compact'), parsing the JSONL transcript and correlating it with git state to summarize files touched during the session, then injecting the summary as additionalContext to restore context immediately after compaction.
+
+### Filter sensitive paths, secret patterns, and build directories from context summary
+Status: agent-initiated — not requested; security measure
+Touches: `.claude/hooks/compact-context-summary.py`
+
+The hook explicitly excludes build directories (build/, .gradle/, node_modules/, etc.), secret-like filenames (.env, *.pem, *.key, credentials*), and paths outside the project root from the injected context. This prevents inadvertent exposure of credentials, build artifacts, or out-of-scope files.
+
+### Cross-reference transcript tool calls with git state instead of git history alone
+Status: agent-initiated
+Touches: `.claude/hooks/compact-context-summary.py`
+
+Rather than relying solely on git history, the hook parses the JSONL transcript to identify files touched via specific tool calls (Read, Write, Edit, MultiEdit, NotebookEdit, Grep), then correlates this with git status and git diff numstat. This approach surfaces what was actually session-relevant rather than just what changed in the repository.
+
+### Silent exit when SessionStart source is not 'compact'
+Status: agent-initiated
+Touches: `.claude/hooks/compact-context-summary.py`
+
+The hook exits cleanly (exit 0, no stdout) for all SessionStart invocations except those with source='compact', and also produces no output when the session involved no changes. This prevents unnecessary context injection on normal session starts, keeping the hook's effect targeted to post-compaction resumption.
+
+### Store hook registration in project-level .claude/settings.json
+Status: discussed — confirmed as correct by examining user's working settings.json
+Touches: `.claude/settings.json`
+
+The hook configuration is stored in .claude/settings.json (not settings.local.json), making it part of the project's shared, version-controlled configuration that all team members access. The project-level scope was confirmed by cross-referencing against the user's existing settings.json structure.
+
+### Use matcher='compact' to gate hook to compaction events only
+Status: discussed
+Touches: `.claude/settings.json`
+
+The hook is registered under SessionStart with matcher='compact', ensuring the hook mechanism invokes this hook only when the SessionStart event originates from the 'compact' source. This pattern is documented in the hook-development skill's configuration reference.
+
+### Set 15-second timeout for hook command execution
+Status: agent-initiated
+Touches: `.claude/settings.json`
+
+The hook command configuration includes timeout=15 to ensure the hook completes promptly and does not hang during session resumption. The value was chosen to accommodate file I/O and git operations without excessive delay.
+
+### Report only file status and line counts; never include file contents or diffs
+Status: agent-initiated
+Touches: `.claude/hooks/compact-context-summary.py`
+
+The injected context reports only file status (modified, untracked, etc.) and line-count statistics from git numstat (e.g., '+2/-1'), never actual file contents, diff bodies, or commit messages. This keeps the injected context concise and prevents the conversation context window from being bloated.
+
+### Document limitation: hook only tracks specific tool calls from transcript
+Status: agent-initiated
+Touches: `.claude/hooks/compact-context-summary.py`
+
+The script's module docstring documents a known limitation: the hook only parses specific tool calls (Read, Write, Edit, MultiEdit, NotebookEdit, Grep) from the transcript. Bash-driven file operations, sub-agent (Task) transcripts, and other file touches outside these tools are intentionally not tracked. This sets expectations and identifies a scope for future enhancement.
