@@ -1,3 +1,7 @@
+---
+apply: always
+---
+
 # CLAUDE.md
 
 Guidance for agents working in this repository.
