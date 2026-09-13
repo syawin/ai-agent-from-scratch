@@ -995,3 +995,12 @@ Created categorization layer and permission-evaluation function as standalone, w
 
 Considered/rejected: Runtime enforcement wiring considered but deferred in favor of creating standalone categorization layer first, reducing risk of destabilizing agent loop.
 Risk: Categorization data has no effect on tool execution until integrated into handleToolCalls(). Aligns with earlier decision that PermissionMode currently has no runtime consumer in agent loop.
+
+### Run Codex review before committing ToolPermissions implementation
+Status: discussed — part of established pre-commit verification workflow
+Touches: `src/main/kotlin/com/example/aiagent/ToolPermissions.kt`, `src/test/kotlin/com/example/aiagent/ToolPermissionsTest.kt`
+
+Codex review was executed on the ToolPermissions implementation as part of the pre-commit verification workflow. The review found no actionable correctness defects and confirmed comprehensive unit coverage for the three-tier tool permission categorization model. The review identified insufficient path confinement in write tool checks as a potential future integration issue but accepted this as deferred work rather than a blocking concern.
+
+Risk: Write tool permission enforcement remains incomplete in its path confinement validation; this may surface as an integration bug when runtime enforcement is wired into handleToolCalls
+Reviewer attention: When implementing tool permission enforcement integration into handleToolCalls, ensure write tool checks include proper path confinement validation to address the limitation identified during Codex review
