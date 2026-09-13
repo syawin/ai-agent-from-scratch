@@ -1,6 +1,6 @@
 # Why: master
 
-<!-- grepathy:v1 generated 2026-09-12 — review before sharing; edit freely, edits are preserved -->
+<!-- grepathy:v1 generated 2026-09-13 — review before sharing; edit freely, edits are preserved -->
 
 ## Intent
 Add core agent tools (bash, file read, glob, grep) and document security considerations for a learning-stage AI agent implementation.
@@ -763,3 +763,200 @@ Status: agent-initiated
 Touches: `.claude/hooks/compact-context-summary.py`
 
 The script's module docstring documents a known limitation: the hook only parses specific tool calls (Read, Write, Edit, MultiEdit, NotebookEdit, Grep) from the transcript. Bash-driven file operations, sub-agent (Task) transcripts, and other file touches outside these tools are intentionally not tracked. This sets expectations and identifies a scope for future enhancement.
+
+### Choose kotlinx-cli 0.3.6 as CLI argument parsing library
+Status: discussed — confirmed as already-decided from prior design discussion
+Touches: `build.gradle.kts`
+
+The plan confirms `kotlinx-cli` was already the settled choice from prior conversation. Version 0.3.6 is the latest published version on Maven Central. Gradle 9.5.1's variant-aware resolution via the `kotlin("jvm")` plugin transparently selects the `-jvm` variant; no explicit `-jvm` suffix needed. The library is experimental per JetBrains; implementation should verify against Maven Central at the time of execution.
+
+Considered/rejected: Other Kotlin CLI libraries were evaluated in prior research agents; kotlinx-cli was selected as the available community-maintained option.
+Risk: Library is experimental and 0.3.6 is not a recent release; recommend quick Maven Central verification before final build.
+Reviewer attention: Confirm dependency resolves correctly and no variant conflicts arise from Gradle version.
+
+### Fix Main.kt compilation errors as prerequisite to CLI integration
+Status: agent-initiated — identified during repository exploration; not explicitly requested in user prompts
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+Code exploration revealed Main.kt is in a non-compiling state: a dead Python-pseudocode comment block, a Kotlin pseudocode block referencing undefined names (argparse, cliArgs, getLlmClient, Path.cwd), and the original working main() body still present below it, creating duplicate val client declarations. This blocks all compilation and testing. The Plan agent acknowledged this must be resolved before CLI integration can proceed.
+
+Risk: The repository currently cannot compile. Dead code and undefined references must be removed and replaced with working implementations before any other work can proceed.
+
+### Extract client initialization into getLlmClient() function
+Status: agent-initiated — identified during code exploration; not explicitly requested
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+Code exploration found the broken pseudocode references undefined getLlmClient(), but the actual OpenAIOkHttpClient.builder() initialization exists inline in the current working main() body (lines 403–409). Extracting this logic into a dedicated function resolves the undefined reference, improves testability, and enables reuse across multiple initialization paths.
+
+Risk: Extracting initialization logic adds a layer of indirection; if not documented clearly, future client-construction changes may be duplicated or initialization dependencies misunderstood.
+
+### Create PermissionMode.fromValue() or equivalent enum lookup
+Status: agent-initiated — identified during code exploration; incompatibility diagnosed by reconnaissance agent
+Touches: `src/main/kotlin/com/example/aiagent/PermissionMode.kt`, `src/main/kotlin/com/example/aiagent/Main.kt`
+
+PermissionMode is an enum with three constants (DEFAULT, ACCEPT_EDITS, DANGEROUSLY_SKIP_PERMISSIONS), but the pseudocode attempts to construct it from a string: PermissionMode(cliArgs.mode). Kotlin enums do not accept raw string arguments to their constructors. A lookup helper (e.g., companion object method fromValue(String) or PermissionMode.entries.first { it.value == ... }) is required to map CLI-provided strings to enum constants.
+
+Risk: Without a proper lookup mechanism, parsing enum values from CLI arguments will either not compile or fail at runtime with a mismatch between expected enum constructors and actual signatures.
+
+### Preserve agentLoop() test signature compatibility
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`, `src/test/kotlin/com/example/aiagent/AgentLoopTest.kt`
+
+Code exploration revealed 14+ test call sites in AgentLoopTest.kt depending on agentLoop's current 2-parameter signature: (client: OpenAIClient, exit: (Int) -> Nothing = ::exitProcess). Two tests (lines 316, 333) pass a trailing lambda for the exit parameter to assert specific exit behaviors. Any new required parameters must be placed after exit with defaults, or all positional-argument call sites must be converted to named parameters to prevent silent binding errors.
+
+Risk: If new required parameters are inserted before exit without defaults, existing test calls using positional arguments will silently bind to incorrect parameters, producing incorrect test assertions without compilation warnings.
+
+### Do not change agentLoop() signature in this task
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`, `src/test/kotlin/com/example/aiagent/AgentLoopTest.kt`
+
+The plan provides detailed analysis of trailing-lambda binding in Kotlin: today `exit` is the last parameter, so `agentLoop(client) { status -> ... }` correctly binds the lambda to `exit`. Appending new parameters like `mode` and `workingDir` after `exit` would move `exit` off the end, causing the trailing lambda to incorrectly bind to `workingDir: Path` (not a function type), breaking the build at two call sites. Inserting new parameters between `client` and `exit` would preserve correctness, but would be premature since `handleToolCalls` and permission-gating are out of scope and no code inside `agentLoop` can consume these values today. Computing them locally in `main()` and using only for the startup banner follows CLAUDE.md's convention against half-finished implementations and unused parameters.
+
+Considered/rejected: Appending parameters after `exit`: breaks trailing-lambda syntax at call sites. Inserting between `client` and `exit`: technically correct but adds unused parameters, violating CLAUDE.md testing guidance.
+Risk: None to existing code; zero signature changes means 14+ existing test call sites require no review.
+Reviewer attention: Verify that agentLoop() is called unchanged at all 14+ call sites; confirm `main()` test at AgentLoopTest.kt line 377 is the only consumer of main()'s signature and receives `emptyArray()`.
+
+### Compute mode and workingDir as local variables in main(); do not pass to agentLoop
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+Instead of threading `PermissionMode` and working directory through to `agentLoop` for future permission-gating, the plan scopes these to `main()` only, using them exclusively for the startup banner. This follows CLAUDE.md's convention against incomplete implementations: permission-gating logic and `Tools.kt` consumption are explicitly future work, so no code inside `agentLoop` can meaningfully consume these values today.
+
+Reviewer attention: Verify that `mode` and `workingDir` are computed and printed in the banner but never passed as arguments to `agentLoop(client)`.
+
+### Extract getLlmClient() as private function from inline code
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+Move the existing inline OpenAIClient construction (OpenAIOkHttpClient.builder()…) into a named private function with no behavior change. This improves readability of `main()` without adding new functionality. The function receives 100% method coverage transitively through the existing `main()`-calling test in `AgentLoopTest.kt`, so no dedicated unit test is required.
+
+Reviewer attention: Verify exact signature and content of extracted function matches the inline code it replaces; confirm JaCoco coverage remains at 100% method without new test.
+
+### Use inline PermissionMode lookup following CLAUDE.md testing conventions
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+Instead of extracting a companion function like `PermissionMode.fromValue()`, compute the mode with a single-line inline lookup: `val mode = PermissionMode.entries.first { it.value == modeArg }`. This follows CLAUDE.md's principle: "Prefer inline logic over new private helper functions unless you're also adding a test that exercises them." The `ArgType.Choice` restriction on `modeArg` already guarantees it is one of three legal strings, so no additional validation logic is needed.
+
+Reviewer attention: Confirm method count does not grow unnecessarily and inline lookup is present in final implementation.
+
+### Update main() to accept args: Array<String> parameter
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`, `src/test/kotlin/com/example/aiagent/AgentLoopTest.kt`
+
+Change signature from `fun main()` to `fun main(args: Array<String>)` to receive command-line arguments for `--mode` flag parsing. This is a real signature change affecting the one existing direct `main()` call site in `AgentLoopTest.kt`.
+
+Risk: Breaking change to main() signature; one test call site must be updated.
+Reviewer attention: Verify AgentLoopTest.kt line 377 (or equivalent) is updated to `main(emptyArray())` to match new signature.
+
+### Use java.nio.file.Paths for workingDir computation
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+Compute the working directory as `java.nio.file.Paths.get("").toAbsolutePath().normalize()` rather than `System.getProperty("user.dir")`. This mirrors the existing idiom in `Tools.kt`, which already uses `Paths.get()`, `Path`, and `Files` throughout, ensuring consistency in how the project navigates filesystem APIs.
+
+Reviewer attention: Verify import of `java.nio.file.Paths` is added; confirm idiom matches Tools.kt usage.
+
+### Use ArgType.Choice with plain string list, not enum variant
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+Define the CLI option using `ArgType.Choice(listOf("default", "acceptEdits", "dangerouslySkipPermissions"), { it })` rather than the reified-enum overload `ArgType.Choice<PermissionMode>()`. Although a second form exists for enums, the plan rejects it because `PermissionMode`'s runtime `.value` strings (e.g., `"acceptEdits"`) do not match the Kotlin constant names (e.g., `ACCEPT_EDITS`), forcing a custom converter that adds complexity without benefit. Plain string choice is simpler and pairs naturally with the inline lookup step.
+
+Reviewer attention: Verify `ArgType.Choice` uses string list form with correct choice values matching `PermissionMode.ACCEPT_EDITS.value` etc.
+
+### Add --mode acceptEdits test to AgentLoopTest
+Status: discussed
+Touches: `src/test/kotlin/com/example/aiagent/AgentLoopTest.kt`
+
+Add a new test (e.g., "main threads --mode flag through to the startup banner") that calls `main(arrayOf("--mode", "acceptEdits"))` with `withInput("\\exit")` and asserts the banner contains the non-default mode value. This exercises the `ArgType.Choice` parse path for a non-default value and confirms CLI flag threading end-to-end. Feed `\exit` first or `main()` will attempt a real `localhost:1234` connection and hang.
+
+Risk: Do not add a test for invalid `--mode` values; kotlinx-cli's `parse()` calls `exitProcess` directly on bad choices, which kills the test JVM.
+Reviewer attention: Verify new test feeds `\\exit` before any real network interaction; confirm assertions check both mode value and presence of command prompt in output.
+
+### Defer optional PermissionModeTest to post-implementation verification
+Status: discussed
+Touches: `src/test/kotlin/com/example/aiagent/`
+
+The plan notes an unconfirmed risk: `PermissionMode`'s compiler-generated `values()` and `valueOf()` enum methods may be flagged as uncovered by JaCoco's 100%-method rule if the project's `jacocoTestCoverageVerification` block does not explicitly exclude Kotlin enum synthetics. Rather than add a test preemptively, implement the main changes, run `./gradlew check`, and only add a small `PermissionModeTest.kt` (or inline asserts in `AgentLoopTest.kt`) if the JaCoco XML report actually shows `PermissionMode` methods as missed.
+
+Reviewer attention: After full implementation, run `./gradlew check` and review JaCoco HTML report for `PermissionMode` coverage; only add test if report shows missed lines/methods.
+
+### Replace identity-function ArgType.Choice with reified enum overload
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+The code-review agent identified a critical validation bypass: ArgType.Choice was using an identity converter, so invalid --mode values parsed silently then crashed at runtime with uncaught NoSuchElementException. Replaced with kotlinx-cli's reified ArgType.Choice<PermissionMode>(toString = { it.value }), which validates at parse time and derives choice list automatically from enum entries. This closes the crash path and eliminates manual value-list duplication across three locations (ArgType list, description, enum .value fields).
+
+Considered/rejected: Leaving the identity converter in place would continue deferring validation errors to runtime and require hand-synchronization of mode values in multiple places.
+Risk: Future PermissionMode enum changes must update both the enum values and the agent code using them.
+Reviewer attention: Verify kotlinx-cli's reified overload correctly rejects invalid --mode values at parse time and that test coverage includes invalid-mode rejection paths.
+
+### Fix ArgParser program name to match Gradle launcher artifact
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+ArgParser was hardcoded with program name 'aiagent', but the actual Gradle-generated launcher (from rootProject.name) is 'ai-agent-from-scratch'. This caused --help output and error messages to reference a non-existent script. Updated to 'ai-agent-from-scratch' so users see the correct invocation command.
+
+Risk: If rootProject.name changes, this hardcoded name may become stale.
+Reviewer attention: Confirm the new name appears correctly in ./gradlew installDist output and matches the actual launcher binary name.
+
+### Clean up cosmetic code inconsistencies in Main.kt
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+Removed three cosmetic issues: double-space typo in startup banner ('mode  (working'), unnecessary .normalize() call on an already-normalized path (diverged from Tools.kt pattern), and unnecessary local variable `client` bound and used once. Improves clarity and consistency with established patterns in the codebase.
+
+### Defer GNU-style --mode=value syntax support as a product decision
+Status: discussed — Flagged as a limitation but left unfixed pending explicit syntax-convention choice
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+Agent discovered that ArgParser defaults to OptionPrefixStyle.LINUX, rejecting GNU-style --mode=value form at tokenizer level. Fixing requires switching to OptionPrefixStyle.GNU, but kotlinx-cli 0.3.6 supports only one style at a time. Switching would break the space-separated --mode value form already tested in AgentLoopTest. Flagged as a syntax-convention trade-off requiring explicit product decision rather than a unilateral mechanical fix.
+
+Considered/rejected: Switching to GNU style would enable --mode=value but break --mode value form; supporting both requires a library feature (multiple prefix styles) that kotlinx-cli 0.3.6 does not provide.
+Reviewer attention: Decide which syntax convention to standardize on, then update OptionPrefixStyle and all test inputs accordingly. Cannot support both with current library version.
+
+### Leave ServiceRunningTest.kt's duplicate client construction unchanged
+Status: agent-initiated — Out-of-scope: fixing would require behavior change and visibility loosening
+Touches: `src/test/kotlin/com/example/aiagent/ServiceRunningTest.kt`
+
+Agent observed that ServiceRunningTest.kt constructs OpenAIClient inline instead of reusing the new getLlmClient() function, creating two independent client-construction sites that could drift (e.g., future timeout changes to getLlmClient() would not propagate). Left unchanged because fixing would require: loosening getLlmClient()'s file-private visibility, modifying an existing integration test (outside current diff scope), and potentially changing timeout behavior of that test.
+
+Risk: Client construction sites can silently diverge; future changes to one will not automatically propagate to the other.
+
+### Preserve getLlmClient() extraction against premature-abstraction observation
+Status: discussed — Prior why-pack deliberation already decided this; not reverting
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+Agent noted getLlmClient() currently has only one call site and no direct unit tests, which normally would not justify a private helper per repo convention. However, agent preserved the extraction because why-pack already deliberated this design choice for anticipated future reuse and testability. Reverting would override a documented design decision rather than fix a defect.
+
+### Accept kotlinx-cli's direct exitProcess behavior as documented limitation
+Status: discussed — Already accepted in .ai/why/master.md; inherent library behavior, not a defect
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+Agent identified that kotlinx-cli's parse() calls exitProcess directly on --help or errors, bypassing the injectable-exit convention used elsewhere. This prevents unit testing of error paths without killing the test JVM. This limitation was already explicitly accepted and documented as a known risk in .ai/why/master.md, not a new defect.
+
+### Format statusline effort level display with em dash separator
+Status: directed
+Touches: `buddy-status.sh`
+
+The statusline script was modified to extract the effort level from JSON piped on stdin and conditionally append it to the model name. When present, the display renders as '[Model — Level]' (e.g., '[Sonnet 5 — high]'); when absent, it renders as '[Model]' alone. Both render branches (with and without git remote) were updated to use the conditional formatting.
+
+Reviewer attention: Verify the statusline renders correctly in practice with effort level present and absent. The subagent verified logic via static reading rather than live stdin execution, so a visual spot-check is recommended.
+
+### Commit Main.kt CLI work in three atomic commits by component concern
+Status: directed
+Touches: `src/main/kotlin/com/example/aiagent/PermissionMode.kt`, `build.gradle.kts`, `src/main/kotlin/com/example/aiagent/Main.kt`, `src/test/kotlin/com/example/aiagent/AgentLoopTest.kt`
+
+Three commits were sequenced to isolate independent concerns: f8ec086 introduces PermissionMode as a standalone type definition with no consumers; d7a61e0 adds the kotlinx-cli:0.3.6 build dependency in isolation; f34f61b wires the --mode CLI flag into main() paired with its test coverage in AgentLoopTest.kt in a single commit to avoid an intermediate state where tests fail. This strategy preserves intermediate build stability and enables granular bisecting if needed.
+
+Considered/rejected: Combining all changes into a single commit or splitting the behavior change from its test coverage were rejected to maintain atomicity and preserve intermediate correctness.
+Reviewer attention: Verify each commit is self-contained: the enum is unused until the final commit, the dependency alone produces no behavior change, and the CLI wiring is inseparable from its test coverage.
+
+### Exclude .ai/why/master.md from feature commits per repository convention
+Status: discussed — established in prior CLAUDE.md work
+Touches: `.ai/why/master.md`
+
+The grepathy tool's auto-generated why-pack documentation is left unstaged following this repository's documented convention. These tool-managed files receive separate commits from feature work to maintain clear authorship boundaries and preserve the tool's independent commit history.
+
+Risk: Inconsistent application of this convention across sessions may accidentally bundle auto-generated updates with feature commits, obscuring ownership and creating merge conflicts.
