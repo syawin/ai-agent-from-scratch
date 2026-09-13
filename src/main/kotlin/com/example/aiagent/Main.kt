@@ -13,8 +13,12 @@ import com.openai.models.responses.ResponseFunctionToolCall
 import com.openai.models.responses.ResponseInputItem
 import com.openai.models.responses.ResponseOutputItem
 import com.openai.models.responses.Tool
+import kotlinx.cli.ArgParser
+import kotlinx.cli.ArgType
+import kotlinx.cli.default
 import java.net.ConnectException
 import java.net.SocketTimeoutException
+import java.nio.file.Paths
 import java.time.Duration
 import kotlin.system.exitProcess
 
@@ -354,13 +358,30 @@ fun agentLoop(
     }
 }
 
-fun main() {
-    val client: OpenAIClient =
-        OpenAIOkHttpClient
-            .builder()
-            .apiKey("lm-studio")
-            .baseUrl("http://localhost:1234/v1/")
-            .timeout(Duration.ofSeconds(30))
-            .build()
-    agentLoop(client)
+private fun getLlmClient(): OpenAIClient =
+    OpenAIOkHttpClient
+        .builder()
+        .apiKey("lm-studio")
+        .baseUrl("http://localhost:1234/v1/")
+        .timeout(Duration.ofSeconds(30))
+        .build()
+
+fun main(args: Array<String>) {
+    val parser = ArgParser("ai-agent-from-scratch")
+    // Configures permission mode options for tool execution
+    val mode: PermissionMode by parser.option(
+        ArgType.Choice<PermissionMode>(toString = { it.value }),
+        fullName = "mode",
+        description = "Permission mode for tool execution. 'default': read tools are free, " +
+            "everything else requires approval. 'acceptEdits': read + write tools are free " +
+            "when inside the working directory, everything else requires approval. " +
+            "'dangerouslySkipPermissions': all tools run without any prompt.",
+    ).default(PermissionMode.DEFAULT)
+    parser.parse(args)
+
+    val workingDir = Paths.get("").toAbsolutePath()
+
+    println("Agent started in '${mode.value}' mode (working dir: $workingDir)")
+
+    agentLoop(getLlmClient())
 }

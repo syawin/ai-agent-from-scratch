@@ -374,8 +374,18 @@ class AgentLoopTest {
     fun `main exits before connecting when given the exit command`() {
         withInput("\\exit")
 
-        main()
+        main(emptyArray())
 
+        assertContains(capturedOutput(), "> ")
+    }
+
+    @Test
+    fun `main threads --mode flag through to the startup banner`() {
+        withInput("\\exit")
+
+        main(arrayOf("--mode", "acceptEdits"))
+
+        assertContains(capturedOutput(), "Agent started in 'acceptEdits' mode")
         assertContains(capturedOutput(), "> ")
     }
 }
