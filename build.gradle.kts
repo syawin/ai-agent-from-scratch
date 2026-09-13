@@ -14,6 +14,7 @@ repositories {
 dependencies {
     implementation("com.openai:openai-java:4.42.0")
     implementation("org.jsoup:jsoup:1.22.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.6")
 
     testImplementation(kotlin("test"))
     testImplementation("io.mockk:mockk:1.14.2")
