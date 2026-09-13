@@ -960,3 +960,38 @@ Touches: `.ai/why/master.md`
 The grepathy tool's auto-generated why-pack documentation is left unstaged following this repository's documented convention. These tool-managed files receive separate commits from feature work to maintain clear authorship boundaries and preserve the tool's independent commit history.
 
 Risk: Inconsistent application of this convention across sessions may accidentally bundle auto-generated updates with feature commits, obscuring ownership and creating merge conflicts.
+
+### Accept missing-authorization-enforcement in --mode flag as deliberate learning-stage gap
+Status: discussed — security review finding handled per existing principle; aligns with prior scope decision
+Touches: `src/main/kotlin/com/example/aiagent/Main.kt`
+
+A background security review flagged missing-authorization-enforcement on the newly wired --mode CLI flag. The implementation resolves the flag to a PermissionMode value but does not yet enforce permissions, as actual enforcement work was explicitly scoped out of this task. The team acknowledged this as an expected learning-stage gap already documented in project memory as deliberate deferred work, and proceeded with the commit.
+
+Considered/rejected: Implementing permission enforcement for --mode in this task; explicitly deferred per prior scope boundary.
+Risk: If the --mode flag is exposed to untrusted callers before permission enforcement is implemented, it could allow unauthorized use of the agent with different permission levels.
+Reviewer attention: Verify permission enforcement for --mode is prioritized and implemented before this flag is exposed to end users or untrusted code paths.
+
+### Create three-tier tool categorization model in ToolPermissions.kt
+Status: directed — User explicitly requested grouping tools into three categories
+Touches: `src/main/kotlin/com/example/aiagent/ToolPermissions.kt`
+
+Designed three permission tiers: READ_ONLY for read/planning tools (read_file, glob_files, grep, read_scratchpad, write_scratchpad, todo_*), WRITE for file-modification tools (write_file, edit_file), and DANGEROUS for unrestricted tools (run_bash, webfetch). Implemented via ToolCategory enum and TOOL_CATEGORIES map assigning each of 12 tools to its tier, aligning categorization to existing --mode flag semantics already documented in Main.kt. Included isToolAllowed(name: String, mode: PermissionMode) function to support future permission-check integration.
+
+Reviewer attention: Verify all 12 tools from getToolSchemas() are present in TOOL_CATEGORIES and correctly assigned. Confirm isToolAllowed() logic matches --mode behavior: test mode allows READ_ONLY only; acceptEdits allows READ_ONLY and WRITE; dangerouslySkipPermissions allows all.
+
+### Create ToolPermissionsTest.kt with comprehensive categorization coverage
+Status: discussed
+Touches: `src/test/kotlin/com/example/aiagent/ToolPermissionsTest.kt`
+
+Implemented 8-test suite verifying category-completeness audit (all tools from getToolSchemas() present in TOOL_CATEGORIES), per-tier membership, cross-product of PermissionMode × tier combinations, and fail-closed case for unknown tools. Tests passed and achieved zero method coverage regression; build gate ./gradlew check confirmed 100% method coverage.
+
+Reviewer attention: Confirm category-completeness test will alert if tools are added to getToolSchemas() but forgotten in TOOL_CATEGORIES, preventing silent permission gaps.
+
+### Defer runtime enforcement wiring to handleToolCalls
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/ToolPermissions.kt`
+
+Created categorization layer and permission-evaluation function as standalone, well-tested infrastructure but did not integrate permission checks into handleToolCalls() or tool dispatch logic. Chose categorize-first approach to establish data model and tests before modifying agent loop behavior.
+
+Considered/rejected: Runtime enforcement wiring considered but deferred in favor of creating standalone categorization layer first, reducing risk of destabilizing agent loop.
+Risk: Categorization data has no effect on tool execution until integrated into handleToolCalls(). Aligns with earlier decision that PermissionMode currently has no runtime consumer in agent loop.
