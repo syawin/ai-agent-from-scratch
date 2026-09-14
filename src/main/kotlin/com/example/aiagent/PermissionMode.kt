@@ -10,5 +10,5 @@ enum class PermissionMode(
 ) {
     DEFAULT("default"),
     ACCEPT_EDITS("acceptEdits"),
-    DANGEROUSLY_SKIP_PERMISSIONS("dangerouslySkipPermissions")
+    DANGEROUSLY_SKIP_PERMISSIONS("dangerouslySkipPermissions"),
 }
