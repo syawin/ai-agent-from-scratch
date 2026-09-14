@@ -109,21 +109,21 @@ class AgentLoopTest {
     @Test
     fun `exit command terminates loop without API call`() {
         withInput("\\exit")
-        agentLoop(client)
+        agentLoop(client, permissionMode = PermissionMode.DEFAULT)
         verify(exactly = 0) { responseService.create(any<ResponseCreateParams>()) }
     }
 
     @Test
     fun `EOF terminates loop`() {
         System.setIn(ByteArrayInputStream(ByteArray(0)))
-        agentLoop(client)
+        agentLoop(client, permissionMode = PermissionMode.DEFAULT)
         verify(exactly = 0) { responseService.create(any<ResponseCreateParams>()) }
     }
 
     @Test
     fun `blank input is skipped without API call`() {
         withInput("", "   ", "\\exit")
-        agentLoop(client)
+        agentLoop(client, permissionMode = PermissionMode.DEFAULT)
         verify(exactly = 0) { responseService.create(any<ResponseCreateParams>()) }
     }
 
@@ -133,7 +133,7 @@ class AgentLoopTest {
     fun `successful response is printed to stdout`() {
         withInput("hello", "\\exit")
         stubCreate(mockResponse("Hello there!"))
-        agentLoop(client)
+        agentLoop(client, permissionMode = PermissionMode.DEFAULT)
         assertContains(capturedOutput(), "Hello there!")
     }
 
@@ -141,7 +141,7 @@ class AgentLoopTest {
     fun `no response fallback when choices list is empty`() {
         withInput("hello", "\\exit")
         stubCreate(mockEmptyOutput())
-        agentLoop(client)
+        agentLoop(client, permissionMode = PermissionMode.DEFAULT)
         assertContains(capturedOutput(), "(no response)")
     }
 
@@ -149,7 +149,7 @@ class AgentLoopTest {
     fun `empty content returns empty string not no-response`() {
         withInput("hello", "\\exit")
         stubCreate(mockResponse(""))
-        agentLoop(client)
+        agentLoop(client, permissionMode = PermissionMode.DEFAULT)
         assertFalse(
             capturedOutput().contains("(no response)"),
             "Empty content should not trigger '(no response)' fallback",
@@ -164,7 +164,7 @@ class AgentLoopTest {
                 mockResponse("Response 1"),
                 mockResponse("Response 2"),
             )
-        agentLoop(client)
+        agentLoop(client, permissionMode = PermissionMode.DEFAULT)
         val output = capturedOutput()
         assertContains(output, "Response 1")
         assertContains(output, "Response 2")
@@ -179,7 +179,7 @@ class AgentLoopTest {
                 mockResponse("Done"),
             )
 
-        agentLoop(client)
+        agentLoop(client, permissionMode = PermissionMode.DEFAULT)
 
         assertContains(capturedOutput(), "[tool] unknown_tool({})")
         assertContains(capturedOutput(), "Done")
@@ -232,7 +232,7 @@ class AgentLoopTest {
             withInput("use every tool", "registry answer", "\\exit")
             every { responseService.create(any<ResponseCreateParams>()) } returnsMany responses
 
-            agentLoop(client)
+            agentLoop(client, permissionMode = PermissionMode.DEFAULT)
 
             val output = capturedOutput()
             assertContains(output, "registry bash result")
@@ -303,7 +303,7 @@ class AgentLoopTest {
                 mockResponse("Recovered"),
             )
 
-        agentLoop(client)
+        agentLoop(client, permissionMode = PermissionMode.DEFAULT)
 
         assertContains(capturedOutput(), "Recovered")
         val capturedParams = mutableListOf<ResponseCreateParams>()
@@ -320,7 +320,7 @@ class AgentLoopTest {
         stubCreateThrows(ConnectException("Connection refused"))
         val exitStatuses = mutableListOf<Int>()
         try {
-            agentLoop(client) { status ->
+            agentLoop(client, permissionMode = PermissionMode.DEFAULT) { status ->
                 exitStatuses.add(status)
                 throw ExitProcessException(status)
             }
@@ -337,7 +337,7 @@ class AgentLoopTest {
         stubCreateThrows(SocketTimeoutException("timeout"))
         val exitStatuses = mutableListOf<Int>()
         try {
-            agentLoop(client) { status ->
+            agentLoop(client, permissionMode = PermissionMode.DEFAULT) { status ->
                 exitStatuses.add(status)
                 throw ExitProcessException(status)
             }
@@ -352,7 +352,7 @@ class AgentLoopTest {
     fun `generic exception prints error and loop continues`() {
         withInput("hello", "\\exit")
         stubCreateThrows(RuntimeException("Something broke"))
-        agentLoop(client)
+        agentLoop(client, permissionMode = PermissionMode.DEFAULT)
         assertContains(capturedOutput(), "An unexpected error occurred: Something broke")
     }
 
@@ -364,7 +364,7 @@ class AgentLoopTest {
                 "fail",
             ) andThen mockResponse("ok")
 
-        agentLoop(client)
+        agentLoop(client, permissionMode = PermissionMode.DEFAULT)
 
         val capturedParams = mutableListOf<ResponseCreateParams>()
         verify(exactly = 2) { responseService.create(capture(capturedParams)) }

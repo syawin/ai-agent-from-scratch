@@ -26,6 +26,16 @@ class ToolsTest {
     }
 
     @Test
+    fun `runBash executes the command in the given working directory`() {
+        val dir = Files.createTempDirectory("run-bash-cwd").toRealPath()
+        try {
+            assertEquals(dir.toString(), runBash("pwd -P", dir))
+        } finally {
+            dir.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
     fun `readFile returns the requested lines`() {
         val file = Files.createTempFile("read-file", ".txt")
         try {

@@ -18,6 +18,7 @@ import kotlinx.cli.ArgType
 import kotlinx.cli.default
 import java.net.ConnectException
 import java.net.SocketTimeoutException
+import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.Duration
 import kotlin.system.exitProcess
@@ -25,12 +26,12 @@ import kotlin.system.exitProcess
 private val json = ObjectMapper()
 
 /**
- * A registry of tools represented as a map. Each key is a tool name (String) and
+ * Builds a registry of tools represented as a map. Each key is a tool name (String) and
  * its corresponding value is a lambda function that takes a map of string keys
  * and optional values as input (`Map<String, Any?>`) and returns a string output.
  *
  * The available tools include:
- * - `run_bash`: Executes a Bash command.
+ * - `run_bash`: Executes a Bash command in [workingDir].
  * - `read_file`: Reads a specified range of lines from a file.
  * - `glob_files`: Finds files matching a glob pattern in a directory.
  * - `grep`: Searches for lines matching a regex pattern in files under a specified path.
@@ -45,10 +46,13 @@ private val json = ObjectMapper()
  * - `ask_question`: Prompts the user with a question via stdin and returns their trimmed answer.
  *
  * This registry enables dynamic invocation of predefined tools based on their string key.
+ *
+ * @param workingDir The directory passed through to tools that need a filesystem or process
+ *                    anchor (currently only `run_bash`).
  */
-private val TOOL_REGISTRY: Map<String, (Map<String, Any?>) -> String> =
+private fun toolRegistry(workingDir: Path): Map<String, (Map<String, Any?>) -> String> =
     mapOf(
-        "run_bash" to { args -> runBash(args.getValue("command") as String) },
+        "run_bash" to { args -> runBash(args.getValue("command") as String, workingDir) },
         "read_file" to { args ->
             readFile(
                 args.getValue("path") as String,
@@ -145,11 +149,15 @@ private val TOOL_SCHEMAS: List<Tool> =
  *                  Each item represents a specific function or tool execution request.
  * @param input A mutable list of `ResponseInputItem` to which the results of the tool executions
  *              will be appended.
+ * @param workingDir The directory tools that touch the filesystem or spawn processes (e.g.
+ *                    `run_bash`) should operate in.
  */
 fun handleToolCalls(
     toolCalls: List<ResponseOutputItem>,
     input: MutableList<ResponseInputItem>,
+    workingDir: Path,
 ) {
+    val registry = toolRegistry(workingDir)
     // Iterates tool requests; invokes registry functions; appends results
     for (item in toolCalls) {
         if (!item.isFunctionCall()) {
@@ -170,8 +178,8 @@ fun handleToolCalls(
 
                 println("  [tool] $name($args)")
 
-                TOOL_REGISTRY[name]?.invoke(args)
-                    ?: "Error: unknown tool '$name'. Available tools: ${TOOL_REGISTRY.keys}"
+                registry[name]?.invoke(args)
+                    ?: "Error: unknown tool '$name'. Available tools: ${registry.keys}"
             } catch (e: Exception) {
                 "Error executing tool '$name': ${e.message ?: e.javaClass.simpleName}"
             }
@@ -271,11 +279,15 @@ If all three are satisfied, give your final answer. If any are not, re-enter the
  * Handles user inputs, AI responses, and tool executions within the loop.
  *
  * @param client An instance of `OpenAIClient` used to communicate with the AI model for chat interactions.
+ * @param permissionMode The permission mode for tool execution (default is `PermissionMode.DEFAULT`).
+ * @param workingDir The working directory for the agent (default is the current working directory).
  * @param exit A lambda function to terminate the program, typically used for error handling
  *             (default is `exitProcess`).
  */
 fun agentLoop(
     client: OpenAIClient,
+    permissionMode: PermissionMode = PermissionMode.DEFAULT,
+    workingDir: Path = Paths.get("").toAbsolutePath(),
     exit: (Int) -> Nothing = ::exitProcess,
 ) {
     // Conversation history, seeded empty — system instructions travel per-request instead
@@ -345,7 +357,7 @@ fun agentLoop(
 
                 // Executes tool calls or prints content and terminates
                 if (toolCalls.isNotEmpty()) {
-                    handleToolCalls(toolCalls, input)
+                    handleToolCalls(toolCalls, input, workingDir)
                 } else {
                     val text =
                         output
@@ -397,5 +409,5 @@ fun main(args: Array<String>) {
 
     println("Agent started in '${mode.value}' mode (working dir: $workingDir)")
 
-    agentLoop(getLlmClient())
+    agentLoop(getLlmClient(), mode, workingDir = workingDir)
 }

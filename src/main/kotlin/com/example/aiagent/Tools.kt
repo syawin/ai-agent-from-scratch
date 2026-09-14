@@ -15,10 +15,15 @@ import kotlin.io.path.useLines
  * Executes a given Bash command and retrieves its output.
  *
  * @param command The Bash command to execute as a string.
+ * @param workingDir The directory the command is executed in. Defaults to the process's own
+ *   working directory.
  * @return The output of the command, including any error messages from STDERR, appended to the standard output.
  */
-fun runBash(command: String): String {
-    val process = ProcessBuilder("bash", "-c", command).start()
+fun runBash(
+    command: String,
+    workingDir: Path = Paths.get("").toAbsolutePath(),
+): String {
+    val process = ProcessBuilder("bash", "-c", command).directory(workingDir.toFile()).start()
     // Drain stderr on a separate thread so a command that floods the stderr pipe buffer
     // cannot deadlock against us blocking on a full read of stdout.
     val stderr = StringBuilder()
