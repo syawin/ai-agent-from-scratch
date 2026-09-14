@@ -1,6 +1,6 @@
 # Why: master
 
-<!-- grepathy:v1 generated 2026-09-13 — review before sharing; edit freely, edits are preserved -->
+<!-- grepathy:v1 generated 2026-09-14 — review before sharing; edit freely, edits are preserved -->
 
 ## Intent
 Add core agent tools (bash, file read, glob, grep) and document security considerations for a learning-stage AI agent implementation.
@@ -1004,3 +1004,42 @@ Codex review was executed on the ToolPermissions implementation as part of the p
 
 Risk: Write tool permission enforcement remains incomplete in its path confinement validation; this may surface as an integration bug when runtime enforcement is wired into handleToolCalls
 Reviewer attention: When implementing tool permission enforcement integration into handleToolCalls, ensure write tool checks include proper path confinement validation to address the limitation identified during Codex review
+
+### Refactor tool-permission categories to set-based model
+Status: discussed — Execution completed in commit 6477c10
+Touches: `src/main/kotlin/com/example/aiagent/ToolPermissions.kt`, `src/test/kotlin/com/example/aiagent/ToolPermissionsTest.kt`
+
+Converted ToolCategory enum with TOOL_CATEGORIES map to explicit READ_TOOLS, PLANNING_TOOLS, and WRITE_TOOLS sets. Maintains behavior for all 12 pre-existing tools while establishing a clearer categorization model for future tool additions.
+
+### Implement ask_question as missing planning tool
+Status: discussed — Execution completed in commit b59afeb
+Touches: `src/main/kotlin/com/example/aiagent/Tools.kt`, `src/test/kotlin/com/example/aiagent/ToolsTest.kt`, `src/main/kotlin/com/example/aiagent/ToolPermissions.kt`, `src/test/kotlin/com/example/aiagent/ToolPermissionsTest.kt`
+
+Added ask_question tool including schema definition, registry dispatch function, system prompt integration, and PLANNING_TOOLS set membership. Tool enables agent to request clarification from user when needed.
+
+### Execute project-mandated verification workflow
+Status: agent-initiated — per verifying-change-impact skill requirement
+Touches: `src/test/kotlin/com/example/aiagent/ToolPermissionsTest.kt`, `src/test/kotlin/com/example/aiagent/ToolsTest.kt`, `src/test/kotlin/com/example/aiagent/AgentLoopTest.kt`
+
+Project guidelines mandate verification workflow for changes adding tools or modifying permission checks. Agent invoked verifying-change-impact skill, tracing consistency of dispatch map (TOOL_REGISTRY), schema list (getToolSchemas), and system prompt across changes. Full ./gradlew check gate passed with 100% method coverage; behavior preservation verified for all 13 tools across three permission modes and 12 original-tool decision paths.
+
+Reviewer attention: Confirm 100% method coverage gate passes and no test-execution regressions introduced.
+
+### Accept askQuestion EOF behavior as deliberate design tradeoff
+Status: discussed — Code-review agent determined this was intentional design, not a defect, despite flagging it in review
+Touches: `src/main/kotlin/com/example/aiagent/Tools.kt`
+
+The code-review agent identified that askQuestion returns an empty string when stdin is exhausted, which could be ambiguous in headless runs. However, this behavior was assessed as intentional and already covered by existing tests, representing a deliberate design tradeoff rather than a defect. No code changes were applied despite the high-level review with --fix flag, as the behavior correctly implements the intended design.
+
+Considered/rejected: Changing EOF to return null or a distinct sentinel string was considered but rejected because the current empty-string behavior is intentional, tested, and functions as specified.
+Risk: In headless/non-interactive runs, the model could theoretically retry ask_question indefinitely if interpreting the empty string as ambiguous; this risk is mitigated by existing tests validating the intended behavior.
+Reviewer attention: Verify that the empty-string-on-EOF contract for ask_question is clearly documented in any system prompt or planning-tool guidance that references this tool.
+
+### Separate categorization refactor and feature implementation into independent atomic commits
+Status: discussed
+Touches: `src/main/kotlin/com/example/aiagent/ToolPermissions.kt`, `src/test/kotlin/com/example/aiagent/ToolPermissionsTest.kt`, `src/main/kotlin/com/example/aiagent/Tools.kt`, `src/test/kotlin/com/example/aiagent/ToolsTest.kt`
+
+Split implementation into two sequential commits: first, the set-based categorization refactor (6477c10, behavior-preserving for existing tools); second, new ask_question tool plus its categorization (b59afeb). Each commit passes ./gradlew check independently, ensuring intermediate state remains buildable.
+
+Considered/rejected: Single combined commit would obscure the infrastructure refactor within a feature addition, making code review and potential future reverts more difficult.
+Reviewer attention: Verify that commit 6477c10 changes only category structure with no tool behavior changes, and that commit b59afeb adds the tool and its categorization as a logical unit.
