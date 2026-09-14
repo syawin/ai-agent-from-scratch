@@ -1,57 +1,60 @@
 package com.example.aiagent
 
 /**
- * Groups every tool name (as used in [getToolSchemas] and the tool registry) into one of three
- * risk tiers, mirroring the three-tier description already given to users via the `--mode` flag
- * in [PermissionMode]:
- *
- * - [READ_ONLY]: read-only or in-memory planning tools. Always safe to run unattended.
- * - [WRITE]: tools that mutate files on disk within the working directory.
- * - [DANGEROUS]: tools with effects beyond the working directory (arbitrary shell execution,
- *   outbound network requests).
+ * Read-only tools (as used in [getToolSchemas] and the tool registry): they inspect the
+ * filesystem but never mutate it. Always allowed to run unattended.
  */
-enum class ToolCategory {
-    READ_ONLY,
-    WRITE,
-    DANGEROUS,
-}
-
-/**
- * Maps every known tool name to its [ToolCategory].
- */
-val TOOL_CATEGORIES: Map<String, ToolCategory> =
-    mapOf(
-        "read_file" to ToolCategory.READ_ONLY,
-        "glob_files" to ToolCategory.READ_ONLY,
-        "grep" to ToolCategory.READ_ONLY,
-        "read_scratchpad" to ToolCategory.READ_ONLY,
-        "write_scratchpad" to ToolCategory.READ_ONLY,
-        "todo_append" to ToolCategory.READ_ONLY,
-        "todo_list" to ToolCategory.READ_ONLY,
-        "todo_update" to ToolCategory.READ_ONLY,
-        "write_file" to ToolCategory.WRITE,
-        "edit_file" to ToolCategory.WRITE,
-        "run_bash" to ToolCategory.DANGEROUS,
-        "webfetch" to ToolCategory.DANGEROUS,
+val READ_TOOLS: Set<String> =
+    setOf(
+        "read_file",
+        "glob_files",
+        "grep",
     )
 
 /**
- * Whether [toolName] is allowed to run unattended under the given [mode], per the tiers above.
+ * Internal planning, bookkeeping, and user-interaction tools (as used in [getToolSchemas] and
+ * the tool registry): in-memory or interactive, never touching the filesystem or network.
+ * Always allowed to run unattended.
+ */
+val PLANNING_TOOLS: Set<String> =
+    setOf(
+        "todo_append",
+        "todo_list",
+        "todo_update",
+        "read_scratchpad",
+        "write_scratchpad",
+    )
+
+/**
+ * Tools that mutate files on disk (as used in [getToolSchemas] and the tool registry). Allowed
+ * unattended under [PermissionMode.ACCEPT_EDITS] (intended for edits confined to the working
+ * directory, per the `--mode` CLI help text) or [PermissionMode.DANGEROUSLY_SKIP_PERMISSIONS].
+ */
+val WRITE_TOOLS: Set<String> =
+    setOf(
+        "write_file",
+        "edit_file",
+    )
+
+/**
+ * Whether [toolName] is allowed to run unattended under the given [mode].
  *
- * - [PermissionMode.DEFAULT]: only [ToolCategory.READ_ONLY] tools are allowed.
- * - [PermissionMode.ACCEPT_EDITS]: [ToolCategory.READ_ONLY] and [ToolCategory.WRITE] tools are allowed.
+ * - [PermissionMode.DEFAULT]: only [READ_TOOLS] and [PLANNING_TOOLS] tools are allowed.
+ * - [PermissionMode.ACCEPT_EDITS]: [READ_TOOLS], [PLANNING_TOOLS], and [WRITE_TOOLS] tools are allowed.
  * - [PermissionMode.DANGEROUSLY_SKIP_PERMISSIONS]: every tool is allowed.
  *
- * An unrecognized [toolName] is treated as [ToolCategory.DANGEROUS] (fails closed).
+ * A tool that is not in any of the three sets above (e.g. `run_bash`, `webfetch`) has effects
+ * beyond the working directory and is treated as dangerous: it is only allowed under
+ * [PermissionMode.DANGEROUSLY_SKIP_PERMISSIONS] (fails closed).
  */
 fun isToolAllowed(
     toolName: String,
     mode: PermissionMode,
 ): Boolean {
-    val category = TOOL_CATEGORIES[toolName] ?: ToolCategory.DANGEROUS
+    val readOrPlanning = toolName in READ_TOOLS || toolName in PLANNING_TOOLS
     return when (mode) {
         PermissionMode.DANGEROUSLY_SKIP_PERMISSIONS -> true
-        PermissionMode.ACCEPT_EDITS -> category != ToolCategory.DANGEROUS
-        PermissionMode.DEFAULT -> category == ToolCategory.READ_ONLY
+        PermissionMode.ACCEPT_EDITS -> readOrPlanning || toolName in WRITE_TOOLS
+        PermissionMode.DEFAULT -> readOrPlanning
     }
 }

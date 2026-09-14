@@ -7,51 +7,55 @@ import kotlin.test.assertTrue
 
 class ToolPermissionsTest {
     /**
-     * Validates all exposed tools possess assigned categories
+     * Validates every tool exposed to the model is either categorized into one of the three
+     * permission sets, or is a known dangerous tool allowed to fall through by omission.
      */
     @Test
-    fun `every tool exposed to the model has a category`() {
-        val toolNames = getToolSchemas().map { (it["function"] as Map<*, *>)["name"] as String }
-        toolNames.forEach { name ->
-            assertTrue(name in TOOL_CATEGORIES, "Tool '$name' is missing from TOOL_CATEGORIES")
-        }
-        assertEquals(toolNames.toSet(), TOOL_CATEGORIES.keys)
+    fun `every tool exposed to the model is categorized or a known dangerous tool`() {
+        val toolNames = getToolSchemas().map { (it["function"] as Map<*, *>)["name"] as String }.toSet()
+        val categorized = READ_TOOLS + PLANNING_TOOLS + WRITE_TOOLS
+        val knownDangerous = setOf("run_bash", "webfetch")
+        assertEquals(toolNames, categorized + knownDangerous)
     }
 
     @Test
-    fun `read and planning tools are read-only`() {
-        val readOnlyTools =
-            listOf(
-                "read_file",
-                "glob_files",
-                "grep",
-                "read_scratchpad",
-                "write_scratchpad",
-                "todo_append",
-                "todo_list",
-                "todo_update",
-            )
-        readOnlyTools.forEach { name ->
-            assertEquals(ToolCategory.READ_ONLY, TOOL_CATEGORIES[name], "$name should be READ_ONLY")
+    fun `read tools are read-only`() {
+        listOf("read_file", "glob_files", "grep").forEach { name ->
+            assertTrue(name in READ_TOOLS, "$name should be in READ_TOOLS")
+        }
+    }
+
+    @Test
+    fun `planning tools cover bookkeeping and user interaction`() {
+        listOf(
+            "todo_append",
+            "todo_list",
+            "todo_update",
+            "read_scratchpad",
+            "write_scratchpad",
+        ).forEach { name ->
+            assertTrue(name in PLANNING_TOOLS, "$name should be in PLANNING_TOOLS")
         }
     }
 
     @Test
     fun `file mutation tools are write`() {
         listOf("write_file", "edit_file").forEach { name ->
-            assertEquals(ToolCategory.WRITE, TOOL_CATEGORIES[name], "$name should be WRITE")
+            assertTrue(name in WRITE_TOOLS, "$name should be in WRITE_TOOLS")
         }
     }
 
     @Test
-    fun `shell and network tools are dangerous`() {
+    fun `shell and network tools are not categorized`() {
         listOf("run_bash", "webfetch").forEach { name ->
-            assertEquals(ToolCategory.DANGEROUS, TOOL_CATEGORIES[name], "$name should be DANGEROUS")
+            assertFalse(name in READ_TOOLS, "$name should not be in READ_TOOLS")
+            assertFalse(name in PLANNING_TOOLS, "$name should not be in PLANNING_TOOLS")
+            assertFalse(name in WRITE_TOOLS, "$name should not be in WRITE_TOOLS")
         }
     }
 
     @Test
-    fun `default mode only allows read-only tools`() {
+    fun `default mode only allows read and planning tools`() {
         assertTrue(isToolAllowed("read_file", PermissionMode.DEFAULT))
         assertTrue(isToolAllowed("todo_list", PermissionMode.DEFAULT))
         assertFalse(isToolAllowed("write_file", PermissionMode.DEFAULT))
@@ -71,7 +75,8 @@ class ToolPermissionsTest {
 
     @Test
     fun `dangerously skip permissions mode allows every tool`() {
-        TOOL_CATEGORIES.keys.forEach { name ->
+        val toolNames = getToolSchemas().map { (it["function"] as Map<*, *>)["name"] as String }
+        toolNames.forEach { name ->
             assertTrue(isToolAllowed(name, PermissionMode.DANGEROUSLY_SKIP_PERMISSIONS))
         }
     }
