@@ -381,11 +381,22 @@ class ToolsTest {
     }
 
     @Test
-    fun `askQuestion returns an empty string when input is exhausted`() {
+    fun `askQuestion returns an EOF marker when input is exhausted`() {
         val originalIn = System.`in`
         try {
             System.setIn(ByteArrayInputStream(ByteArray(0)))
-            assertEquals("", askQuestion("Which approach do you prefer?"))
+            assertEquals("(no answer - EOF)", askQuestion("Which approach do you prefer?"))
+        } finally {
+            System.setIn(originalIn)
+        }
+    }
+
+    @Test
+    fun `askQuestion returns a placeholder when the answer is blank`() {
+        val originalIn = System.`in`
+        try {
+            System.setIn(ByteArrayInputStream("   \n".toByteArray()))
+            assertEquals("(no answer provided)", askQuestion("Which approach do you prefer?"))
         } finally {
             System.setIn(originalIn)
         }

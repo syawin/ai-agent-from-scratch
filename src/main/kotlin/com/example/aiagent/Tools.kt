@@ -330,12 +330,18 @@ fun todoUpdate(
  * Asks the user a clarifying question via stdin and returns their answer.
  *
  * @param question The question to show the user.
- * @return The user's trimmed answer, or an empty string if input is exhausted.
+ * @return The user's trimmed answer, `"(no answer provided)"` if they entered nothing, or
+ *   `"(no answer - EOF)"` if input is exhausted.
  */
 fun askQuestion(question: String): String {
-    println(question)
-    print("> ")
-    return readlnOrNull()?.trim().orEmpty()
+    println("\n  [agent] $question")
+    print("  Your answer: ")
+    val answer = readlnOrNull()?.trim()
+    return when {
+        answer == null -> "(no answer - EOF)"
+        answer.isEmpty() -> "(no answer provided)"
+        else -> answer
+    }
 }
 
 fun getToolSchemas(): List<Map<String, Any>> =
