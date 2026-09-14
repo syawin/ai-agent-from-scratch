@@ -1,6 +1,7 @@
 package com.example.aiagent
 
 import com.sun.net.httpserver.HttpServer
+import java.io.ByteArrayInputStream
 import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -200,6 +201,7 @@ class ToolsTest {
                 "todo_append",
                 "todo_list",
                 "todo_update",
+                "ask_question",
             ),
             names,
         )
@@ -365,6 +367,28 @@ class ToolsTest {
                 "(retry limit reached). Do not retry again. Escalate to the user instead.",
             message,
         )
+    }
+
+    @Test
+    fun `askQuestion prints the question and returns the user's trimmed answer`() {
+        val originalIn = System.`in`
+        try {
+            System.setIn(ByteArrayInputStream("  an answer  \n".toByteArray()))
+            assertEquals("an answer", askQuestion("Which approach do you prefer?"))
+        } finally {
+            System.setIn(originalIn)
+        }
+    }
+
+    @Test
+    fun `askQuestion returns an empty string when input is exhausted`() {
+        val originalIn = System.`in`
+        try {
+            System.setIn(ByteArrayInputStream(ByteArray(0)))
+            assertEquals("", askQuestion("Which approach do you prefer?"))
+        } finally {
+            System.setIn(originalIn)
+        }
     }
 
     private fun withHttpResponse(

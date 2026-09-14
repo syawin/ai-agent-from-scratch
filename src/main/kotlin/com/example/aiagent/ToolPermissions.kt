@@ -23,6 +23,7 @@ val PLANNING_TOOLS: Set<String> =
         "todo_update",
         "read_scratchpad",
         "write_scratchpad",
+        "ask_question",
     )
 
 /**

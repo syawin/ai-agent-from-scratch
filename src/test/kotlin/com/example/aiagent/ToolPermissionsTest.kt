@@ -33,6 +33,7 @@ class ToolPermissionsTest {
             "todo_update",
             "read_scratchpad",
             "write_scratchpad",
+            "ask_question",
         ).forEach { name ->
             assertTrue(name in PLANNING_TOOLS, "$name should be in PLANNING_TOOLS")
         }
@@ -58,6 +59,7 @@ class ToolPermissionsTest {
     fun `default mode only allows read and planning tools`() {
         assertTrue(isToolAllowed("read_file", PermissionMode.DEFAULT))
         assertTrue(isToolAllowed("todo_list", PermissionMode.DEFAULT))
+        assertTrue(isToolAllowed("ask_question", PermissionMode.DEFAULT))
         assertFalse(isToolAllowed("write_file", PermissionMode.DEFAULT))
         assertFalse(isToolAllowed("edit_file", PermissionMode.DEFAULT))
         assertFalse(isToolAllowed("run_bash", PermissionMode.DEFAULT))
@@ -67,6 +69,7 @@ class ToolPermissionsTest {
     @Test
     fun `accept edits mode also allows write tools but not dangerous ones`() {
         assertTrue(isToolAllowed("read_file", PermissionMode.ACCEPT_EDITS))
+        assertTrue(isToolAllowed("ask_question", PermissionMode.ACCEPT_EDITS))
         assertTrue(isToolAllowed("write_file", PermissionMode.ACCEPT_EDITS))
         assertTrue(isToolAllowed("edit_file", PermissionMode.ACCEPT_EDITS))
         assertFalse(isToolAllowed("run_bash", PermissionMode.ACCEPT_EDITS))

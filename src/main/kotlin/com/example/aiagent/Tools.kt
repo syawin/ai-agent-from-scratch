@@ -326,6 +326,18 @@ fun todoUpdate(
     }
 }
 
+/**
+ * Asks the user a clarifying question via stdin and returns their answer.
+ *
+ * @param question The question to show the user.
+ * @return The user's trimmed answer, or an empty string if input is exhausted.
+ */
+fun askQuestion(question: String): String {
+    println(question)
+    print("> ")
+    return readlnOrNull()?.trim().orEmpty()
+}
+
 fun getToolSchemas(): List<Map<String, Any>> =
     listOf(
         mapOf(
@@ -631,6 +643,27 @@ fun getToolSchemas(): List<Map<String, Any>> =
                                         ),
                                 ),
                             "required" to listOf("id"),
+                        ),
+                ),
+        ),
+        mapOf(
+            "type" to "function",
+            "function" to
+                mapOf(
+                    "name" to "ask_question",
+                    "description" to "Ask the user a clarifying question via stdin and return their answer.",
+                    "parameters" to
+                        mapOf(
+                            "type" to "object",
+                            "properties" to
+                                mapOf(
+                                    "question" to
+                                        mapOf(
+                                            "type" to "string",
+                                            "description" to "The question to show the user.",
+                                        ),
+                                ),
+                            "required" to listOf("question"),
                         ),
                 ),
         ),

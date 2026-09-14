@@ -221,12 +221,15 @@ class AgentLoopTest {
                     "todo_append" to mapOf("id" to 90201, "content" to "registry todo result", "status" to "pending"),
                     "todo_list" to mapOf("include_completed" to false),
                     "todo_update" to mapOf("id" to "90201", "status" to "in_progress"),
+                    "ask_question" to mapOf("question" to "Which registry result do you want?"),
                 )
             val responses =
                 calls.mapIndexed { index, (name, arguments) ->
                     mockToolCallResponse(name, json.writeValueAsString(arguments), "call-$index")
                 } + mockResponse("All tools completed")
-            withInput("use every tool", "\\exit")
+            // "registry answer" is consumed by the ask_question tool call mid-loop, not by the
+            // outer REPL prompt — see the assertion below on "[tool result] registry answer".
+            withInput("use every tool", "registry answer", "\\exit")
             every { responseService.create(any<ResponseCreateParams>()) } returnsMany responses
 
             agentLoop(client)
@@ -249,6 +252,10 @@ class AgentLoopTest {
             // order-independent proof the tool dispatched and returned a well-formed report.
             assertContains(output, "[tool result] To Do List (")
             assertContains(output, "Successfully updated to do item 90201!")
+            // Same rationale as the write_scratchpad check above: assert on the "[tool result]"
+            // line, since handleToolCalls echoes the raw args map (containing the question text)
+            // before invoking the tool.
+            assertContains(output, "[tool result] registry answer")
             assertContains(output, "All tools completed")
             verify(exactly = responses.size) { responseService.create(any<ResponseCreateParams>()) }
         } finally {

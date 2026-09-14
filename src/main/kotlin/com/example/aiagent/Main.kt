@@ -42,6 +42,7 @@ private val json = ObjectMapper()
  * - `todo_append`: Adds an item to the to-do list.
  * - `todo_list`: Lists current to-do items.
  * - `todo_update`: Updates an existing to-do item.
+ * - `ask_question`: Prompts the user with a question via stdin and returns their trimmed answer.
  *
  * This registry enables dynamic invocation of predefined tools based on their string key.
  */
@@ -93,6 +94,7 @@ private val TOOL_REGISTRY: Map<String, (Map<String, Any?>) -> String> =
                 (args["status"] as? String)?.let(TaskStatus::from),
             )
         },
+        "ask_question" to { args -> askQuestion(args.getValue("question") as String) },
     )
 
 /**
@@ -205,6 +207,7 @@ Action tools: read_file, write_file, edit_file, glob_files, grep, run_bash, webf
 Planning tools:
 - Scratchpad (read_scratchpad / write_scratchpad): your private working memory. Use it to think through an approach, store intermediate findings, or draft content before committing. Each write fully replaces the previous content.
 - To-do list (todo_append / todo_list / todo_update): a persistent task tracker. Items carry a status: pending, in_progress, done, cancelled, or failed.
+- Clarifying questions (ask_question): ask the user a question via stdin when a requirement is genuinely ambiguous and only they can resolve it. Use sparingly — prefer acting on a reasonable default.
 
 ## Working directory
 
