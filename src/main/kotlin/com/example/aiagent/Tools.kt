@@ -152,15 +152,21 @@ fun grep(
  * Writes the specified content to a file at the given path. If the parent
  * directories do not exist, they will be created automatically.
  *
- * @param path The file path where the content should be written.
+ * @param path The file path where the content should be written. A relative path is resolved
+ *   against [workingDir] — the same base [checkPermission] uses to confine write tools under
+ *   [PermissionMode.ACCEPT_EDITS] — so the two agree on where a relative path actually lands.
  * @param content The content to write to the file.
+ * @param workingDir The directory a relative [path] is resolved against. Defaults to the
+ *   process's own working directory.
  * @return A message indicating the number of bytes written and the file path.
  */
 fun writeFile(
     path: String,
     content: String,
+    workingDir: Path = Paths.get("").toAbsolutePath(),
 ): String {
-    val p = Paths.get(path)
+    val requested = Paths.get(path)
+    val p = if (requested.isAbsolute) requested else workingDir.resolve(requested)
     p.parent?.let(Files::createDirectories)
     Files.writeString(p, content)
     return "Wrote ${content.toByteArray(Charsets.UTF_8).size} bytes to $path"
@@ -169,9 +175,13 @@ fun writeFile(
 /**
  * Edits a file by replacing the first occurrence of a specified string with a new string.
  *
- * @param path The file path to be edited.
+ * @param path The file path to be edited. A relative path is resolved against [workingDir] — the
+ *   same base [checkPermission] uses to confine write tools under [PermissionMode.ACCEPT_EDITS] —
+ *   so the two agree on where a relative path actually lands.
  * @param oldString The string to be replaced in the file.
  * @param newString The string to replace the old string with.
+ * @param workingDir The directory a relative [path] is resolved against. Defaults to the
+ *   process's own working directory.
  * @return A message indicating the outcome of the editing operation. Returns an error message if the file does not
  * exist or if the specified string is not found in the file.
  */
@@ -179,9 +189,11 @@ fun editFile(
     path: String,
     oldString: String,
     newString: String,
+    workingDir: Path = Paths.get("").toAbsolutePath(),
 ): String {
     // Replace the first occurrence of old_string with new_string in a file.
-    val p = Paths.get(path)
+    val requested = Paths.get(path)
+    val p = if (requested.isAbsolute) requested else workingDir.resolve(requested)
     if (!Files.exists(p)) {
         return "Error: file not found: $path"
     }

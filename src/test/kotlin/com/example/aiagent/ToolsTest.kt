@@ -165,6 +165,19 @@ class ToolsTest {
     }
 
     @Test
+    fun `writeFile resolves a relative path against the given working directory`() {
+        val workingDir = Files.createTempDirectory("write-file-cwd")
+        try {
+            val result = writeFile("relative.txt", "content", workingDir)
+
+            assertEquals("Wrote 7 bytes to relative.txt", result)
+            assertEquals("content", Files.readString(workingDir.resolve("relative.txt")))
+        } finally {
+            workingDir.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
     fun `editFile replaces only the first occurrence`() {
         val file = Files.createTempFile("edit-file", ".txt")
         try {
@@ -185,6 +198,18 @@ class ToolsTest {
             assertEquals("Error: string not found in $file", editFile(file.toString(), "old", "new"))
         } finally {
             file.deleteIfExists()
+        }
+    }
+
+    @Test
+    fun `editFile resolves a relative path against the given working directory`() {
+        val workingDir = Files.createTempDirectory("edit-file-cwd")
+        try {
+            Files.writeString(workingDir.resolve("relative.txt"), "old and old")
+            assertEquals("Edited relative.txt", editFile("relative.txt", "old", "new", workingDir))
+            assertEquals("new and old", Files.readString(workingDir.resolve("relative.txt")))
+        } finally {
+            workingDir.toFile().deleteRecursively()
         }
     }
 

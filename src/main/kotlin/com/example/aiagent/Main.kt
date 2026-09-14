@@ -35,8 +35,8 @@ private val json = ObjectMapper()
  * - `read_file`: Reads a specified range of lines from a file.
  * - `glob_files`: Finds files matching a glob pattern in a directory.
  * - `grep`: Searches for lines matching a regex pattern in files under a specified path.
- * - `write_file`: Writes content to a file at a given path.
- * - `edit_file`: Replaces the first occurrence of a string in a file.
+ * - `write_file`: Writes content to a file at a given path, relative to [workingDir].
+ * - `edit_file`: Replaces the first occurrence of a string in a file, relative to [workingDir].
  * - `webfetch`: Fetches content from a specified URL.
  * - `read_scratchpad`: Reads the current scratchpad content.
  * - `write_scratchpad`: Replaces the current scratchpad content.
@@ -48,7 +48,10 @@ private val json = ObjectMapper()
  * This registry enables dynamic invocation of predefined tools based on their string key.
  *
  * @param workingDir The directory passed through to tools that need a filesystem or process
- *                    anchor (currently only `run_bash`).
+ *                    anchor: `run_bash` runs in it, and `write_file`/`edit_file` resolve a
+ *                    relative `path` argument against it (matching the same base
+ *                    [checkPermission] uses to confine those tools under
+ *                    [PermissionMode.ACCEPT_EDITS]).
  */
 private fun toolRegistry(workingDir: Path): Map<String, (Map<String, Any?>) -> String> =
     mapOf(
@@ -71,13 +74,14 @@ private fun toolRegistry(workingDir: Path): Map<String, (Map<String, Any?>) -> S
             )
         },
         "write_file" to { args ->
-            writeFile(args.getValue("path") as String, args.getValue("content") as String)
+            writeFile(args.getValue("path") as String, args.getValue("content") as String, workingDir)
         },
         "edit_file" to { args ->
             editFile(
                 args.getValue("path") as String,
                 args.getValue("old_string") as String,
                 args.getValue("new_string") as String,
+                workingDir,
             )
         },
         "webfetch" to { args -> webfetch(args.getValue("url") as String) },
@@ -149,7 +153,8 @@ private val TOOL_SCHEMAS: List<Tool> =
  *                  Each item represents a specific function or tool execution request.
  * @param input A mutable list of `ResponseInputItem` to which the results of the tool executions
  *              will be appended.
- * @param permissionMode The permission mode tool calls are evaluated under. Not yet enforced.
+ * @param permissionMode The permission mode each tool call is checked against via
+ *                        [checkPermission] before dispatch.
  * @param workingDir The directory tools that touch the filesystem or spawn processes (e.g.
  *                    `run_bash`) should operate in.
  */
@@ -180,8 +185,14 @@ fun handleToolCalls(
 
                 println("  [tool] $name($args)")
 
-                registry[name]?.invoke(args)
-                    ?: "Error: unknown tool '$name'. Available tools: ${registry.keys}"
+                val toolFn = registry[name]
+                when {
+                    toolFn == null -> "Error: unknown tool '$name'. Available tools: ${registry.keys}"
+                    !checkPermission(name, args, permissionMode, workingDir) ->
+                        "Error: permission denied for tool '$name'. The user denied this action; " +
+                            "do not retry — ask the user how to proceed."
+                    else -> toolFn(args)
+                }
             } catch (e: Exception) {
                 "Error executing tool '$name': ${e.message ?: e.javaClass.simpleName}"
             }

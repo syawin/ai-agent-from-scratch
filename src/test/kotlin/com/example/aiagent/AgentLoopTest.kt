@@ -232,7 +232,11 @@ class AgentLoopTest {
             withInput("use every tool", "registry answer", "\\exit")
             every { responseService.create(any<ResponseCreateParams>()) } returnsMany responses
 
-            agentLoop(client, permissionMode = PermissionMode.DEFAULT)
+            // This test dispatches run_bash/write_file/edit_file/webfetch too, none of which are
+            // READ_TOOLS/PLANNING_TOOLS — under any mode but DANGEROUSLY_SKIP_PERMISSIONS,
+            // checkPermission would fall through to an interactive prompt this test's stdin queue
+            // doesn't answer. This test is about registry dispatch, not permission semantics.
+            agentLoop(client, permissionMode = PermissionMode.DANGEROUSLY_SKIP_PERMISSIONS)
 
             val output = capturedOutput()
             assertContains(output, "registry bash result")
@@ -261,6 +265,127 @@ class AgentLoopTest {
         } finally {
             server.stop(0)
             root.toFile().deleteRecursively()
+        }
+    }
+
+    // --- checkPermission wiring tests ---
+
+    @Test
+    fun `default mode prompts before a write tool and denies on n`() {
+        val root = Files.createTempDirectory("permission-deny")
+        val target = root.resolve("out.txt")
+        try {
+            val args = ObjectMapper().writeValueAsString(mapOf("path" to target.toString(), "content" to "hi"))
+            withInput("write something", "n", "\\exit")
+            every { responseService.create(any<ResponseCreateParams>()) } returnsMany
+                listOf(
+                    mockToolCallResponse("write_file", args, "call-1"),
+                    mockResponse("Acknowledged"),
+                )
+
+            agentLoop(client, permissionMode = PermissionMode.DEFAULT)
+
+            assertContains(capturedOutput(), "[permission required] write_file")
+            assertFalse(Files.exists(target), "file should not be written when permission is denied")
+            val capturedParams = mutableListOf<ResponseCreateParams>()
+            verify(exactly = 2) { responseService.create(capture(capturedParams)) }
+            assertContains(capturedParams[1].toString(), "permission denied for tool 'write_file'")
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `default mode runs a write tool after y is granted`() {
+        val root = Files.createTempDirectory("permission-grant")
+        val target = root.resolve("out.txt")
+        try {
+            val args = ObjectMapper().writeValueAsString(mapOf("path" to target.toString(), "content" to "hi"))
+            withInput("write something", "y", "\\exit")
+            every { responseService.create(any<ResponseCreateParams>()) } returnsMany
+                listOf(
+                    mockToolCallResponse("write_file", args, "call-1"),
+                    mockResponse("Acknowledged"),
+                )
+
+            agentLoop(client, permissionMode = PermissionMode.DEFAULT)
+
+            assertContains(capturedOutput(), "[permission required] write_file")
+            assertEquals("hi", Files.readString(target))
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `accept edits mode runs a write tool inside working dir without prompting`() {
+        val root = Files.createTempDirectory("permission-accept-inside")
+        val target = root.resolve("out.txt")
+        try {
+            val args = ObjectMapper().writeValueAsString(mapOf("path" to target.toString(), "content" to "hi"))
+            // Deliberately no "y"/"n" line: if path confinement regresses, this would fall
+            // through to a prompt and consume "\exit" as the answer instead.
+            withInput("write something", "\\exit")
+            every { responseService.create(any<ResponseCreateParams>()) } returnsMany
+                listOf(
+                    mockToolCallResponse("write_file", args, "call-1"),
+                    mockResponse("Acknowledged"),
+                )
+
+            agentLoop(client, permissionMode = PermissionMode.ACCEPT_EDITS, workingDir = root)
+
+            assertFalse(capturedOutput().contains("[permission required]"))
+            assertEquals("hi", Files.readString(target))
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `accept edits mode writes a relative path inside the working dir, not the process cwd`() {
+        val root = Files.createTempDirectory("permission-accept-relative")
+        try {
+            // A relative path is what checkPermission's confinement check and the actual write
+            // must agree on: the model is told the working directory is "the user's project
+            // root" and routinely passes bare relative paths, not just absolute ones.
+            val args = ObjectMapper().writeValueAsString(mapOf("path" to "relative.txt", "content" to "hi"))
+            withInput("write something", "\\exit")
+            every { responseService.create(any<ResponseCreateParams>()) } returnsMany
+                listOf(
+                    mockToolCallResponse("write_file", args, "call-1"),
+                    mockResponse("Acknowledged"),
+                )
+
+            agentLoop(client, permissionMode = PermissionMode.ACCEPT_EDITS, workingDir = root)
+
+            assertFalse(capturedOutput().contains("[permission required]"))
+            assertEquals("hi", Files.readString(root.resolve("relative.txt")))
+        } finally {
+            root.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `accept edits mode still prompts for a write tool outside working dir`() {
+        val root = Files.createTempDirectory("permission-accept-outside-a")
+        val outside = Files.createTempDirectory("permission-accept-outside-b")
+        val target = outside.resolve("out.txt")
+        try {
+            val args = ObjectMapper().writeValueAsString(mapOf("path" to target.toString(), "content" to "hi"))
+            withInput("write something", "n", "\\exit")
+            every { responseService.create(any<ResponseCreateParams>()) } returnsMany
+                listOf(
+                    mockToolCallResponse("write_file", args, "call-1"),
+                    mockResponse("Acknowledged"),
+                )
+
+            agentLoop(client, permissionMode = PermissionMode.ACCEPT_EDITS, workingDir = root)
+
+            assertContains(capturedOutput(), "[permission required] write_file")
+            assertFalse(Files.exists(target))
+        } finally {
+            root.toFile().deleteRecursively()
+            outside.toFile().deleteRecursively()
         }
     }
 
