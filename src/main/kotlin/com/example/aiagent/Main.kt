@@ -198,7 +198,8 @@ fun handleToolCalls(
  * Chat Completions system message.
  */
 private val SYSTEM_INSTRUCTIONS =
-    """You are a capable coding and research assistant.
+    """
+    You are a capable coding and research assistant.
 
 ## Available tools
 
@@ -262,8 +263,8 @@ Do not give a final answer based on the task list being empty alone. Before decl
 2. Verification — check the output against the original goal. For code tasks: run the tests or build with run_bash and confirm they pass. For research tasks: re-read the scratchpad and confirm the assembled answer addresses what was actually asked.
 3. Uncertainty check — read the scratchpad and ask: are there unresolved questions, assumptions that were never validated, or tasks that were cancelled rather than properly completed?
 
-If all three are satisfied, give your final answer. If any are not, re-enter the planning loop — add the outstanding items to the todo list and continue."""
-        .trimIndent()
+If all three are satisfied, give your final answer. If any are not, re-enter the planning loop — add the outstanding items to the todo list and continue.
+    """.trimIndent()
 
 /**
  * Executes an interactive agent loop to facilitate conversation between the user and an AI model.
@@ -290,7 +291,11 @@ fun agentLoop(
         val conversationStart = input.size
         input.add(
             ResponseInputItem.ofEasyInputMessage(
-                EasyInputMessage.builder().role(EasyInputMessage.Role.USER).content(userInput).build(),
+                EasyInputMessage
+                    .builder()
+                    .role(EasyInputMessage.Role.USER)
+                    .content(userInput)
+                    .build(),
             ),
         )
 
@@ -317,7 +322,11 @@ fun agentLoop(
                     println("(no response)")
                     input.add(
                         ResponseInputItem.ofEasyInputMessage(
-                            EasyInputMessage.builder().role(EasyInputMessage.Role.ASSISTANT).content("(no response)").build(),
+                            EasyInputMessage
+                                .builder()
+                                .role(EasyInputMessage.Role.ASSISTANT)
+                                .content("(no response)")
+                                .build(),
                         ),
                     )
                     break
@@ -372,14 +381,16 @@ private fun getLlmClient(): OpenAIClient =
 fun main(args: Array<String>) {
     val parser = ArgParser("ai-agent-from-scratch")
     // Configures permission mode options for tool execution
-    val mode: PermissionMode by parser.option(
-        ArgType.Choice<PermissionMode>(toString = { it.value }),
-        fullName = "mode",
-        description = "Permission mode for tool execution. 'default': read tools are free, " +
-            "everything else requires approval. 'acceptEdits': read + write tools are free " +
-            "when inside the working directory, everything else requires approval. " +
-            "'dangerouslySkipPermissions': all tools run without any prompt.",
-    ).default(PermissionMode.DEFAULT)
+    val mode: PermissionMode by parser
+        .option(
+            ArgType.Choice<PermissionMode>(toString = { it.value }),
+            fullName = "mode",
+            description =
+                "Permission mode for tool execution. 'default': read tools are free, " +
+                    "everything else requires approval. 'acceptEdits': read + write tools are free " +
+                    "when inside the working directory, everything else requires approval. " +
+                    "'dangerouslySkipPermissions': all tools run without any prompt.",
+        ).default(PermissionMode.DEFAULT)
     parser.parse(args)
 
     val workingDir = Paths.get("").toAbsolutePath()
