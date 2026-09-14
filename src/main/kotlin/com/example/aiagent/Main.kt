@@ -149,12 +149,14 @@ private val TOOL_SCHEMAS: List<Tool> =
  *                  Each item represents a specific function or tool execution request.
  * @param input A mutable list of `ResponseInputItem` to which the results of the tool executions
  *              will be appended.
+ * @param permissionMode The permission mode tool calls are evaluated under. Not yet enforced.
  * @param workingDir The directory tools that touch the filesystem or spawn processes (e.g.
  *                    `run_bash`) should operate in.
  */
 fun handleToolCalls(
     toolCalls: List<ResponseOutputItem>,
     input: MutableList<ResponseInputItem>,
+    permissionMode: PermissionMode,
     workingDir: Path,
 ) {
     val registry = toolRegistry(workingDir)
@@ -357,7 +359,7 @@ fun agentLoop(
 
                 // Executes tool calls or prints content and terminates
                 if (toolCalls.isNotEmpty()) {
-                    handleToolCalls(toolCalls, input, workingDir)
+                    handleToolCalls(toolCalls, input, permissionMode, workingDir)
                 } else {
                     val text =
                         output
