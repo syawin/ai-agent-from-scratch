@@ -187,11 +187,23 @@ fun handleToolCalls(
 
                 val toolFn = registry[name]
                 when {
-                    toolFn == null -> "Error: unknown tool '$name'. Available tools: ${registry.keys}"
-                    !checkPermission(name, args, permissionMode, workingDir) ->
+                    toolFn == null -> {
+                        "Error: unknown tool '$name'. Available tools: ${registry.keys}"
+                    }
+
+                    !checkPermission(
+                        name,
+                        args,
+                        permissionMode,
+                        workingDir,
+                    ) -> {
                         "Error: permission denied for tool '$name'. The user denied this action; " +
                             "do not retry — ask the user how to proceed."
-                    else -> toolFn(args)
+                    }
+
+                    else -> {
+                        toolFn(args)
+                    }
                 }
             } catch (e: Exception) {
                 "Error executing tool '$name': ${e.message ?: e.javaClass.simpleName}"
