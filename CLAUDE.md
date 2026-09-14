@@ -60,6 +60,14 @@ it directly for ground-truth signatures.
   coverage pass), use the `verifying-change-impact` skill
   (`.claude/skills/verifying-change-impact/`) to scope and report verification.
 
+## Git commits
+
+Always commit atomically: one logical change per commit (implementation +
+its own tests together), not a grab-bag of unrelated diffs. Don't bundle in
+pre-existing, unrelated working-tree changes just because they happen to be
+present — leave those for whoever owns them. Each commit should stand on
+its own and pass `./gradlew check` independently.
+
 <!-- grepathy:begin -->
 ## Design reasoning lives in `.ai/why/`
 
