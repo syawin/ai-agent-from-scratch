@@ -33,7 +33,7 @@ they should point back here instead.
 
 | Fact | Source | Re-verify with |
 | --- | --- | --- |
-| Current test files (names only — method counts are known to go stale between snapshots of this repo's history): `ScratchpadTest.kt`, `ServiceRunningTest.kt`, `AgentLoopTest.kt`, `ToolsTest.kt`, `ToDoListTest.kt`. | `src/test/kotlin/com/example/aiagent/` | `find src/test/kotlin -name "*.kt"` |
+| Current test files (names only — method counts are known to go stale between snapshots of this repo's history): `ScratchpadTest.kt`, `ServiceRunningTest.kt`, `AgentLoopTest.kt`, `ToolsTest.kt`, `ToDoListTest.kt`, `ToolPermissionsTest.kt`. Verified 2026-09-14: `find src/test/kotlin -name "*.kt"` confirms `ToolPermissionsTest.kt` exists (was missing from this row previously). | `src/test/kotlin/com/example/aiagent/` | `find src/test/kotlin -name "*.kt"` |
 
 ## Tooling versions & absent tooling
 
