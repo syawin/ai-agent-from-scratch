@@ -68,6 +68,11 @@ pre-existing, unrelated working-tree changes just because they happen to be
 present — leave those for whoever owns them. Each commit should stand on
 its own and pass `./gradlew check` independently.
 
+The remote is `origin` → `https://github.com/syawin/ai-agent-from-scratch.git`.
+This is a solo learning project: commits go straight to `master`, no PR/review
+workflow is in use. Push when asked to, not proactively — committing and
+pushing are separate approvals.
+
 <!-- grepathy:begin -->
 ## Design reasoning lives in `.ai/why/`
 
