@@ -1303,3 +1303,15 @@ Touches: `.ai/why/master.md`
 The agent committed the why-pack documentation changes (commit 1d12726) but refrained from pushing to remote, interpreting the request narrowly (commit-only) and deferring the push decision to the user rather than assuming automatic push was desired.
 
 Reviewer attention: Verify whether why-pack commits should follow a convention of automatic push or user-discretionary push as a matter of team workflow.
+
+### Document remote origin and push convention in CLAUDE.md
+Status: directed
+Touches: `CLAUDE.md`
+
+Updated CLAUDE.md to document the remote origin URL (github.com/syawin/ai-agent-from-scratch) and clarify the project convention that commits are pushed to master without requiring a PR workflow. Documented that pushing is a separate deliberate decision from the act of committing itself. Removed prior language suggesting PR creation when pushing to master.
+
+### Push grepathy why-pack update to origin/master
+Status: directed
+Touches: `.ai/why/master.md`
+
+Pushed the grepathy-generated why-pack entry documenting earlier permission-enforcement design decisions to origin/master. The entry includes a reviewer attention note questioning whether why-pack commits should follow automatic or user-discretionary push conventions as a matter of project policy.
