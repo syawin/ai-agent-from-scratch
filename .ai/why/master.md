@@ -1,6 +1,6 @@
 # Why: master
 
-<!-- grepathy:v1 generated 2026-09-14 — review before sharing; edit freely, edits are preserved -->
+<!-- grepathy:v1 generated 2026-09-15 — review before sharing; edit freely, edits are preserved -->
 
 ## Intent
 Add core agent tools (bash, file read, glob, grep) and document security considerations for a learning-stage AI agent implementation.
